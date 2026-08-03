@@ -26,8 +26,10 @@
     "seniority_floor": "mid",
     "seniority_ceiling": "senior",
     "locations": [
-      "remote", "united states", "usa", "us", "u.s.", "new york", "nyc",
-      "brooklyn", "austin", "san francisco", "los angeles"
+      "remote", "san jose", "sunnyvale", "santa clara", "mountain view",
+      "palo alto", "cupertino", "milpitas", "campbell", "los gatos",
+      "fremont", "menlo park", "redwood city", "san mateo", "foster city",
+      "san francisco", "bay area", "silicon valley", "south bay"
     ],
     "remote_ok": true,
     "comp_floor": 110000,

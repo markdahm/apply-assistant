@@ -1,47 +1,20 @@
 {
-  "_note": "REAL target list for Jordan Rivers (2026-07-05), derived from profile/preferences.md geography + industries. Enumerated by the jordan-source-discovery workflow (76 orgs), feeds verified empirically: Workday CXS endpoints tested live; SGV cities/county/community-colleges are NeoGov (no public API - dead RSS, SPA-only) so they ride Firecrawl; LA museums/nonprofits are on ADP/Paycom-class systems (no free API) - top fits also ride Firecrawl. PeopleAdmin/PageUp/iCIMS schools (Citrus, La Verne, Mt SAC, Oxy, Cal State LA, UCLA, Getty) are future adapters.",
-  "greenhouse": [],
-  "lever": [],
-  "ashby": [],
+  "_note": "South Bay / SF Bay Area starter list — verified 2026-08-03. Every slug below returned live jobs with a real Bay Area presence from its public ATS feed (Greenhouse/Lever/Ashby JSON), so these all work with NO api keys. The knockout filter still trims each candidate's postings to their own locations/role/seniority. Re-run `apply onboard` (or edit here) to swap in a specific candidate's target employers. firecrawl_boards (civic/government via NeoGov) need a FIRECRAWL_API_KEY and are left empty by default.",
+  "greenhouse": [
+    "figma", "stripe", "databricks", "robinhood", "gitlab", "dropbox",
+    "coinbase", "instacart", "samsara", "roku", "zscaler", "pinterest",
+    "lyft", "airbnb", "verkada", "faire", "chime", "brex", "airtable",
+    "gusto", "checkr", "sofi", "affirm", "discord", "reddit", "asana",
+    "nextdoor", "upstart", "block", "anthropic"
+  ],
+  "lever": [
+    "palantir"
+  ],
+  "ashby": [
+    "openai", "ramp", "notion", "cursor", "mercor"
+  ],
   "workable": [],
   "smartrecruiters": [],
-  "workday": [
-    "huntingtonlibrary/HuntingtonCareers",
-    "theclaremontcolleges/TCCS_Careers",
-    "tcsedsystem/PacificOaksCareers"
-  ],
-  "firecrawl_boards": [
-    { "url": "https://www.governmentjobs.com/careers/pasadena", "name": "City of Pasadena" },
-    { "url": "https://www.governmentjobs.com/careers/spasadenaca", "name": "City of South Pasadena" },
-    { "url": "https://www.governmentjobs.com/careers/sanmarinoca", "name": "City of San Marino" },
-    { "url": "https://www.governmentjobs.com/careers/glendaleca", "name": "City of Glendale" },
-    { "url": "https://www.governmentjobs.com/careers/burbankca", "name": "City of Burbank" },
-    { "url": "https://www.governmentjobs.com/careers/arcadiaca", "name": "City of Arcadia" },
-    { "url": "https://www.governmentjobs.com/careers/monrovia", "name": "City of Monrovia" },
-    { "url": "https://www.governmentjobs.com/careers/sierramadre", "name": "City of Sierra Madre" },
-    { "url": "https://www.governmentjobs.com/careers/cityofalhambra", "name": "City of Alhambra" },
-    { "url": "https://www.governmentjobs.com/careers/lacounty", "name": "County of Los Angeles" },
-    { "url": "https://www.governmentjobs.com/careers/lasc", "name": "LA Superior Court" },
-    { "url": "https://www.schooljobs.com/careers/pasadenaedu", "name": "Pasadena City College" },
-    { "url": "https://www.schooljobs.com/careers/gccedu", "name": "Glendale Community College" },
-    { "url": "https://hr.caltech.edu/careers", "name": "Caltech" },
-    { "url": "https://www.nortonsimon.org/about/career-opportunities", "name": "Norton Simon Museum" },
-    { "url": "https://kidspacemuseum.org/about/staff-board/jobs/", "name": "Kidspace Children's Museum" },
-    { "url": "https://www.descansogardens.org/about/careers/", "name": "Descanso Gardens" },
-    { "url": "https://www.laphil.com/about/careers", "name": "LA Phil" },
-    { "url": "https://careers.oxy.edu/en-us/listing/", "name": "Occidental College" },
-    { "url": "https://jobs-getty.icims.com/jobs/search?ss=1", "name": "Getty" },
-    { "url": "https://www.lacma.org/jobs", "name": "LACMA" },
-    { "url": "https://hrjobs.mtsac.edu/postings/search", "name": "Mt. SAC" },
-    { "url": "https://employment.citruscollege.edu/postings/search", "name": "Citrus College" }
-  ],
-  "_jsearch_note": "JSearch (RapidAPI) reads Google for Jobs — the legit way to surface LinkedIn / Indeed / ZipRecruiter / Glassdoor + employer-ATS listings that can't be scraped directly. One query = one request; gated on JSEARCH_API_KEY (free RapidAPI tier ~200/mo) and the every-3rd-day board cadence. Each result's apply_url still runs through classify(), so ATS-direct links get a real lane and pure-aggregator links land in lane D (Jordan applies natively).",
-  "jsearch_queries": [
-    "administrative coordinator in Pasadena, CA",
-    "administrative assistant in Pasadena, CA",
-    "program coordinator in Pasadena, CA",
-    "office coordinator in Pasadena, CA",
-    "museum administrative assistant in Los Angeles, CA",
-    "library assistant in Pasadena, CA"
-  ]
+  "workday": [],
+  "firecrawl_boards": []
 }
