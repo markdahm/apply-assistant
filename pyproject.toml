@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "apply-assistant"
+version = "0.1.0"
+description = "Quality-over-spam job sourcing + application helper. The AI does the grind (find, filter, tailor); the human keeps the voice and the final click."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+dependencies = [
+    "requests>=2.28",
+    "anthropic>=0.40",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["ruff>=0.5", "pytest>=8.0"]
+
+[project.scripts]
+apply = "apply_assistant.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["apply_assistant*"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py39"

@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+<script src="./desk-data.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;height:100%;background:#E7E0D2;}
+  ::selection{background:#E7EAD8;}
+  [contenteditable]:focus{outline:none;}
+  .deskcol::-webkit-scrollbar,#desk-pills::-webkit-scrollbar{height:8px;width:8px;}
+  .deskcol::-webkit-scrollbar-thumb,#desk-pills::-webkit-scrollbar-thumb{background:#D8CFBE;border-radius:4px;}
+  @keyframes deskStamp{0%{transform:scale(2.4) rotate(-14deg);opacity:0;}55%{transform:scale(.86) rotate(-9deg);opacity:1;}72%{transform:scale(1.06) rotate(-7deg);}100%{transform:scale(1) rotate(-8deg);opacity:1;}}
+  @keyframes deskFade{0%{opacity:0;transform:translateY(5px);}100%{opacity:1;transform:translateY(0);}}
+  @media (prefers-reduced-motion: reduce){*{animation:none !important;transition:none !important;}}
+  @media (max-width:760px){
+    #desk-root{height:auto !important;overflow:visible !important;}
+    #desk-body{height:auto !important;}
+    #desk-cols{flex-direction:column !important;}
+    #desk-cols > div{border-right:none !important;border-bottom:1px solid #D8CFBE !important;max-height:none !important;overflow:visible !important;}
+  }
+</style>
+</helmet>
+<div id="desk-root" style="height:100vh;display:flex;flex-direction:column;background:#F4EFE4;background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22120%22 height=%22120%22><filter id=%22n%22><feTurbulence type=%22fractalNoise%22 baseFrequency=%220.9%22 numOctaves=%222%22 stitchTiles=%22stitch%22/><feColorMatrix type=%22saturate%22 values=%220%22/></filter><rect width=%22120%22 height=%22120%22 filter=%22url(%23n)%22 opacity=%220.04%22/></svg>');color:#221E1A;font-family:'Hanken Grotesk',sans-serif;overflow:hidden;">
+
+  <!-- MASTHEAD -->
+  <div style="flex:none;border-bottom:1px solid #D8CFBE;background:rgba(244,239,228,0.95);">
+    <div style="padding:11px 22px 10px;display:flex;align-items:center;justify-content:space-between;gap:16px;">
+      <div style="display:flex;align-items:baseline;gap:8px;">
+        <span style="font-weight:600;font-size:20px;letter-spacing:-0.02em;line-height:1;">The Desk</span>
+        <span aria-hidden="true" style="width:6px;height:6px;border-radius:50%;background:#B4472E;display:inline-block;transform:translateY(-1px);"></span>
+      </div>
+      <div style="display:flex;align-items:center;gap:14px;">
+        <span onClick="{{ onAddOpen }}" role="button" aria-label="Add a job listing" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#2F4A3C;border:1px solid #b6c3b3;border-radius:4px;padding:6px 11px;"><span aria-hidden="true" style="font-size:14px;line-height:1;">+</span> Add</span>
+        <div style="display:flex;font-size:10px;letter-spacing:0.06em;text-transform:uppercase;border:1px solid #D8CFBE;border-radius:4px;overflow:hidden;">
+          <span onClick="{{ onViewTriage }}" role="button" aria-label="Stack view" style="cursor:pointer;padding:6px 10px;background:{{ triageTabBg }};color:{{ triageTabColor }};">Stack</span>
+          <span onClick="{{ onViewLedger }}" role="button" aria-label="All jobs view" style="cursor:pointer;padding:6px 10px;background:{{ ledgerTabBg }};color:{{ ledgerTabColor }};">All jobs</span>
+        </div>
+        <span style="font-size:11px;letter-spacing:0.08em;color:#6B6258;text-transform:uppercase;font-variant-numeric:tabular-nums;">{{ progressLabel }}</span>
+        <sc-if value="{{ showTriage }}" hint-placeholder-val="{{ true }}">
+          <span style="font-size:11px;letter-spacing:0.06em;color:#6B6258;font-variant-numeric:tabular-nums;">{{ posLabel }}</span>
+        </sc-if>
+      </div>
+    </div>
+    <div style="height:2px;background:#E7E0D2;"><div style="height:2px;background:#B4472E;width:{{ progressPct }};transition:width .4s ease;"></div></div>
+  </div>
+
+  <div id="desk-body" style="flex:1;min-height:0;display:flex;flex-direction:column;position:relative;">
+
+    <sc-if value="{{ showTriage }}" hint-placeholder-val="{{ true }}">
+
+    <!-- STACK FILTER -->
+    <div style="flex:none;display:flex;align-items:center;gap:6px;padding:9px 20px 0;overflow-x:auto;background:rgba(244,239,228,0.7);">
+      <sc-for list="{{ filterChips }}" as="c" hint-placeholder-count="6">
+        <span onClick="{{ c.onTap }}" role="button" aria-label="Show {{ c.label }}" style="cursor:pointer;flex:none;font-size:10px;letter-spacing:0.05em;text-transform:uppercase;padding:5px 11px;border-radius:12px;border:1px solid #D8CFBE;background:{{ c.bg }};color:{{ c.color }};user-select:none;white-space:nowrap;">{{ c.label }}</span>
+      </sc-for>
+      <span onClick="{{ onToggleCurated }}" role="checkbox" aria-checked="{{ curatedMark }}" aria-label="{{ curatedLabel }}" style="cursor:pointer;flex:none;margin-left:auto;font-size:10px;letter-spacing:0.04em;color:#6B6258;border:1px solid #D8CFBE;border-radius:3px;padding:5px 10px;user-select:none;white-space:nowrap;background:#FBF8F1;">{{ curatedMark }} {{ curatedLabel }}</span>
+    </div>
+    <!-- STACK PILLS -->
+    <div id="desk-pills" style="flex:none;display:flex;gap:8px;padding:11px 20px;overflow-x:auto;border-bottom:1px solid #D8CFBE;background:rgba(244,239,228,0.7);">
+      <sc-for list="{{ stackPills }}" as="p" hint-placeholder-count="6">
+        <span onClick="{{ p.onSelect }}" role="button" aria-label="{{ p.aria }}" aria-current="{{ p.current }}" style="cursor:pointer;flex:none;display:inline-flex;align-items:center;gap:8px;padding:7px 12px;border-radius:20px;border:1px solid {{ p.border }};background:{{ p.bg }};color:{{ p.color }};max-width:230px;">
+          <span style="width:7px;height:7px;border-radius:50%;background:{{ p.tierColor }};flex:none;"></span>
+          <span style="font-weight:500;font-size:13px;font-variant-numeric:tabular-nums;">{{ p.score }}</span>
+          <span style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ p.title }}</span>
+          <sc-if value="{{ p.manual }}" hint-placeholder-val="{{ false }}"><span aria-label="Added by you" title="Added by you" style="color:#C08A2D;font-size:9px;flex:none;">◆</span></sc-if>
+          <sc-if value="{{ p.fresh }}" hint-placeholder-val="{{ false }}"><span style="font-size:8px;letter-spacing:0.1em;color:#B4472E;border:1px solid #e3bdb0;border-radius:2px;padding:0 4px;flex:none;">NEW</span></sc-if>
+          <sc-if value="{{ p.edited }}" hint-placeholder-val="{{ false }}"><span style="width:5px;height:5px;border-radius:50%;background:#B4472E;flex:none;"></span></sc-if>
+        </span>
+      </sc-for>
+    </div>
+
+    <!-- SUMMARY BAND -->
+    <div style="flex:none;padding:14px 22px 0;background:rgba(251,248,241,0.6);border-bottom:1px solid #D8CFBE;">
+      <div style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:12px;min-width:0;flex:1;">
+          <div aria-label="Fit {{ job.score }} of 100, {{ job.tier }}" style="width:48px;height:48px;border-radius:50%;border:2px solid {{ job.tierColor }};background:#F4EFE4;display:flex;flex-direction:column;align-items:center;justify-content:center;flex:none;">
+            <span style="font-size:17px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums;">{{ job.score }}</span>
+            <span style="font-size:6.5px;letter-spacing:0.08em;text-transform:uppercase;color:{{ job.tierColor }};margin-top:1px;">{{ job.tier }}</span>
+          </div>
+          <div style="min-width:0;">
+            <div style="font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#6B6258;">{{ job.company }} · <span style="color:#B4472E;">{{ job.applyLabel }}</span><sc-if value="{{ job.isManual }}" hint-placeholder-val="{{ false }}"> · <span style="color:#C08A2D;">◆ added by you</span></sc-if></div>
+            <h1 style="font-weight:600;font-size:22px;letter-spacing:-0.02em;line-height:1.1;margin:2px 0 0;">{{ job.title }}</h1>
+          </div>
+        </div>
+        <blockquote style="margin:0;flex:1.4;min-width:260px;font-style:italic;font-size:15px;line-height:1.45;color:#221E1A;border-left:2px solid #B4472E;padding-left:14px;">{{ job.why }}</blockquote>
+      </div>
+      <!-- facts ribbon -->
+      <div style="display:flex;flex-wrap:wrap;gap:0 4px;border-top:1px solid #E2D9C8;border-bottom:1px solid #E2D9C8;margin:13px 0;">
+        <sc-for list="{{ factChips }}" as="f" hint-placeholder-count="6">
+          <div onClick="{{ f.onTap }}" role="button" aria-label="{{ f.aria }}" style="cursor:pointer;flex:1 1 0;min-width:130px;padding:8px 14px 8px 0;">
+            <div style="font-size:8px;letter-spacing:0.13em;text-transform:uppercase;color:#9a9082;display:flex;align-items:center;gap:4px;">{{ f.label }}<sc-if value="{{ f.applyAccent }}" hint-placeholder-val="{{ false }}"><span style="width:4px;height:4px;border-radius:50%;background:#B4472E;"></span></sc-if></div>
+            <div style="font-size:13px;font-weight:500;color:{{ f.valueColor }};margin-top:2px;font-variant-numeric:tabular-nums;border-bottom:{{ f.underline }};display:inline-block;line-height:1.25;">{{ f.value }}</div>
+            <sc-if value="{{ f.belowMin }}" hint-placeholder-val="{{ false }}"><div style="font-size:8px;color:#B4472E;">below your min</div></sc-if>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <!-- THREE COLUMNS -->
+    <div id="desk-cols" style="flex:1;min-height:0;display:flex;">
+
+      <!-- COL 1: POSTING -->
+      <div class="deskcol" style="flex:1;min-width:0;overflow-y:auto;border-right:1px solid #D8CFBE;padding:0 20px 24px;">
+        <div style="position:sticky;top:0;background:#F4EFE4;padding:14px 0 10px;z-index:2;border-bottom:1px solid #E2D9C8;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <span style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#9a9082;">The posting</span>
+          <sc-if value="{{ hasUrl }}" hint-placeholder-val="{{ false }}">
+            <a href="{{ jobUrl }}" target="_blank" rel="noopener" aria-label="Open the original job listing" style="flex:none;font-size:10px;letter-spacing:0.06em;color:#B4472E;border:1px solid #e3bdb0;border-radius:3px;padding:4px 9px;text-decoration:none;">Original listing ↗</a>
+          </sc-if>
+        </div>
+        <sc-if value="{{ hasAbout }}" hint-placeholder-val="{{ true }}">
+          <div style="padding-top:14px;">
+            <div style="font-size:9px;letter-spacing:0.16em;text-transform:uppercase;color:#9a9082;margin-bottom:6px;">About the company</div>
+            <p style="font-size:13px;line-height:1.55;color:#6B6258;margin:0 0 13px;padding-bottom:14px;border-bottom:1px solid #E2D9C8;">{{ job.about }}</p>
+          </div>
+        </sc-if>
+        <sc-if value="{{ hasBenefits }}" hint-placeholder-val="{{ false }}">
+          <div style="padding-top:2px;">
+            <div style="font-size:9px;letter-spacing:0.16em;text-transform:uppercase;color:#9a9082;margin-bottom:6px;">Benefits</div>
+            <p style="font-size:13px;line-height:1.55;color:#6B6258;margin:0 0 13px;padding-bottom:14px;border-bottom:1px solid #E2D9C8;">{{ job.benefits }}</p>
+          </div>
+        </sc-if>
+        <div style="padding-top:2px;">
+          <sc-for list="{{ postingParas }}" as="p" hint-placeholder-count="4">
+            <sc-if value="{{ p.isH }}" hint-placeholder-val="{{ false }}">
+              <div style="font-size:10.5px;font-weight:700;letter-spacing:0.09em;text-transform:uppercase;color:#221E1A;margin:20px 0 8px;padding:{{ p.pad }};background:{{ p.bg }};border-radius:3px;">{{ p.text }}</div>
+            </sc-if>
+            <sc-if value="{{ p.isLi }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;gap:9px;font-size:14px;line-height:1.55;color:#52493f;margin:0 0 7px;padding:{{ p.pad }};background:{{ p.bg }};border-radius:3px;transition:background .3s ease;"><span aria-hidden="true" style="color:#B4472E;flex:none;line-height:1.5;">•</span><span>{{ p.text }}</span></div>
+            </sc-if>
+            <sc-if value="{{ p.isP }}" hint-placeholder-val="{{ true }}">
+              <p style="font-size:14.5px;line-height:1.62;color:#52493f;margin:0 0 13px;background:{{ p.bg }};border-radius:3px;padding:{{ p.pad }};transition:background .3s ease;">{{ p.text }}</p>
+            </sc-if>
+          </sc-for>
+        </div>
+      </div>
+
+      <!-- COL 2: APPLICATION (email/portal + cover) -->
+      <div class="deskcol" style="flex:1.15;min-width:0;overflow-y:auto;border-right:1px solid #D8CFBE;padding:0 20px 24px;background:rgba(251,248,241,0.4);">
+        <div style="position:sticky;top:0;background:#F8F3EA;padding:14px 0 10px;z-index:2;border-bottom:1px solid #E2D9C8;display:flex;align-items:center;justify-content:space-between;">
+          <span style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#9a9082;">Your application</span>
+          <sc-if value="{{ coverEdited }}" hint-placeholder-val="{{ false }}"><span style="font-size:9px;letter-spacing:0.08em;color:#B4472E;border:1px solid #e3bdb0;border-radius:2px;padding:2px 6px;">EDITED BY YOU{{ savedTag }}</span></sc-if>
+        </div>
+
+        <!-- email -->
+        <sc-if value="{{ emailLane }}" hint-placeholder-val="{{ true }}">
+          <div style="margin-top:16px;background:#FBF8F1;border:1px solid #D8CFBE;border-radius:4px;overflow:hidden;">
+            <div style="padding:8px 13px;border-bottom:1px solid #efe7d8;display:flex;align-items:center;justify-content:space-between;"><span style="font-size:9px;letter-spacing:0.16em;text-transform:uppercase;color:#9a9082;">Email — sends on approve</span><span style="display:flex;align-items:center;gap:6px;"><sc-if value="{{ emailDesynced }}" hint-placeholder-val="{{ false }}"><span onClick="{{ onResync }}" role="button" style="cursor:pointer;font-size:9px;color:#B4472E;border:1px solid #e3bdb0;border-radius:2px;padding:2px 6px;">Re-sync ↻</span></sc-if><sc-if value="{{ emailEdited }}" hint-placeholder-val="{{ false }}"><span onClick="{{ onResetEmail }}" role="button" aria-label="Reset email to the original draft" title="Reset to the original draft" style="cursor:pointer;font-size:9px;color:#6B6258;border:1px solid #D8CFBE;border-radius:2px;padding:2px 6px;">Reset ↺</span></sc-if></span></div>
+            <div style="display:flex;gap:9px;padding:9px 13px;border-bottom:1px solid #efe7d8;"><span style="font-size:9px;color:#9a9082;width:48px;flex:none;padding-top:2px;letter-spacing:0.08em;">TO</span><span style="font-size:13px;">{{ job.emailTo }}</span></div>
+            <div style="display:flex;gap:9px;padding:9px 13px;border-bottom:1px solid #efe7d8;"><span style="font-size:9px;color:#9a9082;width:48px;flex:none;padding-top:2px;letter-spacing:0.08em;">SUBJ</span><span role="textbox" contenteditable="true" aria-label="Subject" onInput="{{ onSubjectInput }}" style="font-size:13px;flex:1;cursor:text;">{{ subjectInitial }}</span></div>
+            <div style="padding:11px 13px;"><div role="textbox" contenteditable="true" aria-label="Email body" onInput="{{ onBodyInput }}" style="font-size:14px;line-height:1.55;white-space:pre-wrap;cursor:text;min-height:36px;color:#52493f;">{{ bodyInitial }}</div></div>
+            <div style="padding:9px 13px;border-top:1px solid #efe7d8;display:flex;align-items:center;gap:9px;flex-wrap:wrap;"><span onClick="{{ onPreviewAttach }}" role="button" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:11px;background:#F4EFE4;border:1px solid #D8CFBE;border-radius:3px;padding:5px 9px;"><span aria-hidden="true">▣</span>{{ job.attachment }}</span><span style="font-size:9px;color:#9a9082;margin-left:auto;">from: jordan@hey.com</span></div>
+          </div>
+        </sc-if>
+        <!-- cover letter -->
+        <div style="margin-top:16px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <span style="font-size:9px;letter-spacing:0.16em;text-transform:uppercase;color:#9a9082;">Cover letter — in your voice, tap to edit</span>
+          <sc-if value="{{ coverEdited }}" hint-placeholder-val="{{ false }}"><span onClick="{{ onResetCover }}" role="button" aria-label="Reset cover letter to the original draft" title="Reset to the original draft" style="cursor:pointer;font-size:9px;letter-spacing:0.04em;color:#6B6258;border:1px solid #D8CFBE;border-radius:2px;padding:2px 7px;">Reset ↺</span></sc-if>
+        </div>
+        <div ref="{{ coverRef }}" style="margin-top:9px;background:#FBF8F1;border:1px solid #D8CFBE;border-radius:4px;padding:22px 22px 20px;">
+          <div style="font-size:11px;color:#9a9082;margin-bottom:13px;">{{ job.letterDate }}</div>
+          <div style="font-weight:600;font-size:15px;margin-bottom:11px;">{{ job.salutation }}</div>
+          <div role="textbox" aria-label="Cover letter, editable" contenteditable="true" onInput="{{ onCoverInput }}" style="font-size:15px;line-height:1.6;white-space:pre-wrap;cursor:text;min-height:40px;color:#221E1A;">{{ coverInitial }}</div>
+          <div style="font-size:15px;line-height:1.6;margin-top:11px;">{{ signoff1 }}<br>{{ signoff2 }}</div>
+          <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid #efe7d8;">
+            <span onClick="{{ onDownloadLetter }}" role="button" aria-label="Download the letter as a PDF" style="cursor:pointer;font-size:11px;letter-spacing:0.04em;color:#F4EFE4;background:#2F4A3C;border-radius:3px;padding:7px 13px;">Download PDF ↓</span>
+            <span onClick="{{ onCopyCover }}" role="button" aria-label="Copy the whole letter" style="cursor:pointer;font-size:11px;letter-spacing:0.04em;background:{{ copyBg }};color:{{ copyColor }};border:1px solid #D8CFBE;border-radius:3px;padding:7px 13px;transition:background .2s ease;">{{ copyLabel }}</span>
+          </div>
+        </div>
+        <p style="font-style:italic;font-size:12.5px;line-height:1.5;color:#6B6258;margin:10px 0 0;">Every line traces to something real on your resume. <span onClick="{{ onTraceCover }}" role="button" style="cursor:pointer;color:#B4472E;border-bottom:1px solid #e3bdb0;font-style:normal;">See the traces</span></p>
+      </div>
+
+      <!-- COL 3: RESUME -->
+      <div class="deskcol" style="flex:1.2;min-width:0;overflow-y:auto;padding:0 20px 24px;">
+        <sc-if value="{{ resumeMode }}" hint-placeholder-val="{{ false }}">
+          <div style="position:sticky;top:0;background:#F4EFE4;padding:14px 0 10px;z-index:2;border-bottom:1px solid #E2D9C8;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+            <span style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#9a9082;">{{ resumeTitle }}</span>
+            <span style="display:flex;align-items:center;gap:8px;flex:none;">
+              <sc-if value="{{ hasBefore }}" hint-placeholder-val="{{ false }}">
+                <span onClick="{{ onToggleBefore }}" role="checkbox" aria-checked="{{ beforeMark }}" aria-label="Show the original resume" style="cursor:pointer;font-size:10px;letter-spacing:0.04em;color:#6B6258;border:1px solid #D8CFBE;border-radius:3px;padding:4px 8px;user-select:none;">{{ beforeMark }} Before</span>
+              </sc-if>
+              <span onClick="{{ onDownloadPdf }}" role="button" aria-label="Download the resume PDF" style="cursor:pointer;flex:none;font-size:10px;letter-spacing:0.06em;color:#F4EFE4;background:#2F4A3C;border-radius:3px;padding:5px 11px;">Download PDF ↓</span>
+            </span>
+          </div>
+          <sc-if value="{{ hasResumeSummary }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:11.5px;color:#6B6258;"><span aria-hidden="true" style="width:12px;height:12px;border-radius:2px;background:#E7EAD8;border:1px solid #cdd4bd;flex:none;"></span>{{ resumeSummary }}</div>
+          </sc-if>
+          <div id="desk-resume-slot" style="margin-top:14px;"></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;flex-wrap:wrap;">
+            <span style="font-size:10px;color:#9a9082;">saves as “{{ pdfName }}”</span>
+            <span onClick="{{ onDownloadPdf }}" role="button" style="cursor:pointer;font-size:11px;color:#B4472E;border-bottom:1px solid #e3bdb0;">Download PDF ↓</span>
+          </div>
+          <p style="font-style:italic;font-size:12px;line-height:1.5;color:#6B6258;margin:10px 0 0;">{{ resumeNote }}</p>
+        </sc-if>
+        <sc-if value="{{ diffMode }}" hint-placeholder-val="{{ true }}">
+        <div style="position:sticky;top:0;background:#F4EFE4;padding:14px 0 10px;z-index:2;border-bottom:1px solid #E2D9C8;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <span style="font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#9a9082;">Tailored resume</span>
+          <div style="display:flex;font-size:10px;border:1px solid #D8CFBE;border-radius:3px;overflow:hidden;flex:none;">
+            <span onClick="{{ onShowChanges }}" role="button" style="cursor:pointer;padding:4px 9px;background:{{ changesBg }};color:{{ changesColor }};">Changes</span>
+            <span onClick="{{ onCleanView }}" role="button" style="cursor:pointer;padding:4px 9px;background:{{ cleanBg }};color:{{ cleanColor }};">Clean</span>
+          </div>
+        </div>
+        <div style="font-style:italic;font-size:12.5px;color:#6B6258;margin:12px 0 11px;">{{ job.diffSummary }} · <span onClick="{{ onViewBase }}" role="button" style="cursor:pointer;color:#B4472E;border-bottom:1px solid #e3bdb0;">View base resume</span></div>
+        <div style="border:1px solid #D8CFBE;border-radius:4px;background:#FBF8F1;">
+          <sc-for list="{{ diffLines }}" as="d" hint-placeholder-count="6">
+            <div style="display:flex;align-items:flex-start;gap:9px;padding:9px 13px;background:{{ d.bg }};border-bottom:1px solid #efe7d8;">
+              <span aria-hidden="true" style="font-size:13px;font-weight:600;color:{{ d.leadColor }};width:9px;flex:none;line-height:1.5;">{{ d.lead }}</span>
+              <span onClick="{{ d.onTrace }}" role="button" style="cursor:pointer;flex:1;font-size:14px;line-height:1.5;color:{{ d.textColor }};text-decoration:{{ d.strike }};">{{ d.text }}</span>
+              <sc-if value="{{ d.showControls }}" hint-placeholder-val="{{ false }}">
+                <span style="display:flex;gap:4px;flex:none;">
+                  <span onClick="{{ d.onAccept }}" role="button" aria-label="Keep edit" style="cursor:pointer;font-size:10px;color:#2F4A3C;border:1px solid #b6c3b3;border-radius:2px;padding:2px 6px;">keep</span>
+                  <span onClick="{{ d.onRevert }}" role="button" aria-label="Revert edit" style="cursor:pointer;font-size:10px;color:#9a5a44;border:1px solid #e3bdb0;border-radius:2px;padding:2px 6px;">revert</span>
+                </span>
+              </sc-if>
+            </div>
+          </sc-for>
+          <div style="padding:10px 13px;display:flex;justify-content:space-between;align-items:center;"><span onClick="{{ onDownloadResume }}" role="button" style="cursor:pointer;font-size:11px;color:#B4472E;border-bottom:1px solid #e3bdb0;">Download PDF ↓</span><span style="font-size:10px;color:#9a9082;">keep / revert each change</span></div>
+        </div>
+        </sc-if>
+      </div>
+    </div>
+
+    <!-- STATUS PICKER BAR -->
+    <div style="flex:none;border-top:1px solid #D8CFBE;background:rgba(244,239,228,0.97);padding:12px 22px;">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span style="font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:#9a9082;flex:none;">Status</span>
+        <sc-for list="{{ statusButtons }}" as="b" hint-placeholder-count="5">
+          <span onClick="{{ b.onTap }}" role="button" aria-label="{{ b.aria }}" style="cursor:pointer;flex:1;min-width:96px;min-height:44px;display:flex;align-items:center;justify-content:center;background:{{ b.bg }};color:{{ b.color }};border:1px solid {{ b.border }};border-radius:4px;font-weight:600;font-size:13px;transition:background .15s ease;user-select:none;">{{ b.label }}</span>
+        </sc-for>
+        <sc-if value="{{ hasPortal }}" hint-placeholder-val="{{ true }}">
+          <a href="{{ portalHref }}" target="_blank" rel="noopener" aria-label="{{ portalLabel }}" style="flex:none;min-height:44px;display:flex;align-items:center;justify-content:center;padding:0 16px;border:1.5px solid #2F4A3C;border-radius:4px;font-weight:600;font-size:13px;color:#2F4A3C;text-decoration:none;">{{ portalLabel }}</a>
+        </sc-if>
+        <span onClick="{{ onToggleKeys }}" role="button" aria-label="Keyboard shortcuts" style="cursor:pointer;min-height:44px;width:40px;flex:none;display:flex;align-items:center;justify-content:center;border:1px solid #D8CFBE;border-radius:4px;font-size:14px;color:#9a9082;">?</span>
+      </div>
+      <sc-if value="{{ showKeys }}" hint-placeholder-val="{{ false }}"><div style="margin-top:8px;font-size:10px;color:#9a9082;">Interested <b style="color:#6B6258;font-weight:600;">I</b> · Applied <b style="color:#6B6258;font-weight:600;">A</b> · Ignored <b style="color:#6B6258;font-weight:600;">X</b> · Next <b style="color:#6B6258;font-weight:600;">J</b> · Prev <b style="color:#6B6258;font-weight:600;">K</b> · tap the active status to clear it</div></sc-if>
+    </div>
+    </sc-if>
+
+    <!-- ALL CAUGHT UP -->
+    <sc-if value="{{ showEmpty }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:60px 32px;">
+        <div style="font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:#9a9082;margin-bottom:16px;">The desk is clear</div>
+        <h1 style="font-weight:600;font-size:42px;letter-spacing:-0.025em;line-height:1.05;margin:0;max-width:10ch;">You're all caught up.</h1>
+        <div style="font-size:12px;color:#6B6258;margin-top:20px;font-variant-numeric:tabular-nums;">{{ emptyStats }}</div>
+        <div style="width:40px;height:1px;background:#D8CFBE;margin:24px 0;"></div>
+        <p style="font-size:16px;line-height:1.55;color:#6B6258;max-width:40ch;margin:0;">The agent is still reading new listings. Next check around <span style="color:#221E1A;">4:00 PM</span> — you'll get a quiet notification when a fresh batch lands.</p>
+        <span onClick="{{ onRefresh }}" role="button" style="cursor:pointer;margin-top:26px;font-weight:600;font-size:14px;color:#F4EFE4;background:#2F4A3C;border-radius:4px;padding:14px 24px;min-height:50px;display:flex;align-items:center;">Check for new roles</span>
+      </div>
+    </sc-if>
+
+    <!-- LEDGER (all jobs) -->
+    <sc-if value="{{ showLedger }}" hint-placeholder-val="{{ false }}">
+      <div class="deskcol" style="flex:1;min-height:0;overflow-y:auto;padding:18px 22px 28px;">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap;">
+          <div style="font-weight:600;font-size:20px;letter-spacing:-0.01em;">All jobs <span style="font-size:12px;color:#9a9082;font-weight:400;">· {{ ledgerCount }} scanned</span></div>
+          <div style="font-size:11px;letter-spacing:0.04em;color:#B4472E;">{{ followCount }} need follow-up</div>
+        </div>
+        <div style="display:flex;align-items:center;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#9a9082;border-bottom:1px solid #D8CFBE;padding:0 0 7px;">
+          <span onClick="{{ onSortRole }}" role="button" aria-label="Sort by role" style="cursor:pointer;flex:2.4;min-width:0;">Role{{ sortRole }}</span>
+          <span onClick="{{ onSortLoc }}" role="button" aria-label="Sort by location" style="cursor:pointer;flex:1;min-width:0;">Location{{ sortLoc }}</span>
+          <span onClick="{{ onSortFit }}" role="button" aria-label="Sort by fit" style="cursor:pointer;width:40px;text-align:center;flex:none;">Fit{{ sortFit }}</span>
+          <span onClick="{{ onSortStatus }}" role="button" aria-label="Sort by status" style="cursor:pointer;width:84px;flex:none;">Status{{ sortStatus }}</span>
+          <span onClick="{{ onSortFollow }}" role="button" aria-label="Sort by follow-up" style="cursor:pointer;width:118px;flex:none;">Follow-up{{ sortFollow }}</span>
+        </div>
+        <sc-for list="{{ ledgerRows }}" as="r" hint-placeholder-count="8">
+          <div onClick="{{ r.onOpen }}" role="button" aria-label="Open {{ r.title }} in the review view" style="cursor:{{ r.rowCursor }};display:flex;align-items:center;border-bottom:1px solid #ece4d4;padding:10px 0;font-size:13px;">
+            <span style="flex:2.4;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;"><sc-if value="{{ r.manual }}" hint-placeholder-val="{{ false }}"><span title="Added by you" style="color:#C08A2D;font-size:9px;">◆ </span></sc-if><span style="font-weight:500;">{{ r.title }}</span> <span style="color:#9a9082;">· {{ r.company }}</span></span>
+            <span style="flex:1;min-width:0;color:#6B6258;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ r.location }}</span>
+            <span style="width:40px;text-align:center;flex:none;font-variant-numeric:tabular-nums;font-weight:600;color:{{ r.tierColor }};">{{ r.score }}</span>
+            <span style="width:84px;flex:none;"><span onClick="{{ r.onStatus }}" role="button" title="{{ r.statusTitle }}" aria-label="Status: {{ r.status }} — click to change" style="cursor:{{ r.statusCursor }};font-size:10px;letter-spacing:0.04em;text-transform:uppercase;color:{{ r.statusColor }};border:1px solid #E2D9C8;border-radius:10px;padding:2px 8px;user-select:none;">{{ r.status }}</span></span>
+            <span style="width:118px;flex:none;font-size:11px;color:{{ r.followColor }};">{{ r.followUp }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <!-- STAMP -->
+    <sc-if value="{{ showStamp }}" hint-placeholder-val="{{ false }}">
+      <div aria-hidden="true" style="position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;background:rgba(244,239,228,0.55);">
+        <div style="width:150px;height:150px;border-radius:50%;border:4px solid #2F4A3C;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(251,248,241,0.5);animation:deskStamp .5s cubic-bezier(.2,.8,.2,1) forwards;transform:rotate(-8deg);"><span style="font-weight:600;font-size:15px;letter-spacing:0.14em;text-transform:uppercase;color:#2F4A3C;">Out-tray</span><span style="font-size:10px;letter-spacing:0.1em;color:#2F4A3C;margin-top:4px;">{{ stampVerb }}</span></div>
+      </div>
+    </sc-if>
+
+    <!-- TRACE -->
+    <sc-if value="{{ tracePopover }}" hint-placeholder-val="{{ false }}">
+      <div onClick="{{ onCloseTrace }}" style="position:absolute;inset:0;z-index:30;background:rgba(34,30,26,0.28);display:flex;align-items:center;justify-content:center;padding:24px;">
+        <div onClick="{{ onStop }}" style="background:#FBF8F1;border:1px solid #D8CFBE;border-radius:8px;max-width:460px;width:100%;padding:24px;animation:deskFade .2s ease;">
+          <div style="font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:#9a9082;margin-bottom:10px;">{{ traceTitle }}</div>
+          <p style="font-size:16px;line-height:1.55;color:#221E1A;margin:0 0 8px;">{{ traceText }}</p>
+          <p style="font-size:12px;color:#B4472E;margin:0;">{{ traceSource }}</p>
+          <span onClick="{{ onCloseTrace }}" role="button" style="cursor:pointer;display:inline-block;margin-top:18px;font-size:11px;color:#6B6258;border:1px solid #D8CFBE;border-radius:3px;padding:8px 14px;">Close</span>
+        </div>
+      </div>
+    </sc-if>
+
+  </div>
+</div>
+
+<sc-if value="{{ addOpen }}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ onAddClose }}" style="position:fixed;inset:0;z-index:90;background:rgba(34,30,26,0.34);display:flex;align-items:center;justify-content:center;padding:24px;font-family:'Hanken Grotesk',sans-serif;">
+    <div onClick="{{ onAddStop }}" style="background:#FBF8F1;border:1px solid #D8CFBE;border-radius:8px;max-width:470px;width:100%;padding:26px 26px 24px;animation:deskFade .2s ease;color:#221E1A;">
+      <sc-if value="{{ addInput }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;">
+          <div style="font-weight:600;font-size:21px;letter-spacing:-0.01em;">Add job listings</div>
+          <span onClick="{{ onAddClose }}" role="button" aria-label="Close" style="cursor:pointer;font-size:13px;color:#9a9082;">Cancel</span>
+        </div>
+        <p style="font-size:14px;line-height:1.55;color:#6B6258;margin:9px 0 18px;">Paste one or more links — separated by commas or new lines. The agent reads each posting, pulls the facts, scores the fit, tailors your resume, and drafts a letter in your voice. You keep the final click.</p>
+        <textarea aria-label="Job listing links" placeholder="https://…  paste one or more job links, separated by commas or new lines" onInput="{{ onUrlInput }}" rows="4" style="width:100%;font-family:'Hanken Grotesk',sans-serif;font-size:15px;line-height:1.5;color:#221E1A;background:#F4EFE4;border:1px solid #D8CFBE;border-radius:4px;padding:13px 14px;min-height:104px;resize:vertical;"></textarea>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:16px;">
+          <span onClick="{{ onSubmitAdd }}" role="button" aria-label="Format and draft" aria-disabled="{{ addDisabled }}" style="cursor:pointer;flex:1;min-height:48px;display:flex;align-items:center;justify-content:center;background:{{ addBtnBg }};color:#F4EFE4;border-radius:4px;font-weight:600;font-size:15px;transition:background .25s ease;">Format &amp; draft everything</span>
+        </div>
+        <div style="font-size:11px;color:#9a9082;margin-top:12px;">The agent only drafts — nothing is sent until you approve it in the stack.</div>
+      </sc-if>
+      <sc-if value="{{ processing }}" hint-placeholder-val="{{ false }}">
+        <div style="font-weight:600;font-size:18px;letter-spacing:-0.01em;margin-bottom:4px;">Queuing…</div>
+        <div style="font-size:13px;color:#9a9082;">{{ addSummary }}</div>
+      </sc-if>
+      <sc-if value="{{ addQueued }}" hint-placeholder-val="{{ false }}">
+        <div style="font-weight:600;font-size:20px;letter-spacing:-0.01em;margin-bottom:8px;">Queued ✓</div>
+        <p style="font-size:14.5px;line-height:1.6;color:#52493f;margin:0 0 14px;">{{ addQueuedMsg }}. Each one gets the full treatment — the posting is read, the fit scored, the resume tailored, the letter drafted in your voice — and lands in the stack <b>within about 15 minutes</b>. No need to keep this open.</p>
+        <div style="display:flex;gap:10px;">
+          <span onClick="{{ onAddClose }}" role="button" style="cursor:pointer;flex:1;min-height:44px;display:flex;align-items:center;justify-content:center;background:#2F4A3C;color:#F4EFE4;border-radius:4px;font-weight:600;font-size:14px;">Done</span>
+          <span onClick="{{ onAddOpen }}" role="button" style="cursor:pointer;min-height:44px;display:flex;align-items:center;justify-content:center;padding:0 16px;border:1px solid #D8CFBE;border-radius:4px;font-size:13px;color:#6B6258;">Add more</span>
+        </div>
+      </sc-if>
+      <sc-if value="{{ addFailed }}" hint-placeholder-val="{{ false }}">
+        <div style="font-weight:600;font-size:18px;color:#7a3b27;margin-bottom:8px;">Couldn't queue those</div>
+        <p style="font-size:14px;line-height:1.55;color:#52493f;margin:0 0 14px;">{{ addFailMsg }}</p>
+        <div style="display:flex;gap:10px;">
+          <span onClick="{{ onSubmitAdd }}" role="button" style="cursor:pointer;display:inline-flex;min-height:44px;align-items:center;justify-content:center;padding:0 18px;background:#B4472E;color:#fff;border-radius:4px;font-weight:600;font-size:14px;">Retry</span>
+          <span onClick="{{ onAddBack }}" role="button" style="cursor:pointer;display:inline-flex;min-height:44px;align-items:center;justify-content:center;padding:0 16px;border:1px solid #D8CFBE;border-radius:4px;font-size:13px;color:#6B6258;">Edit links</span>
+        </div>
+      </sc-if>
+    </div>
+  </div>
+</sc-if></x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1340,&quot;height&quot;:840}}">
+class Component extends DCLogic {
+  constructor(props){
+    super(props);
+    const rm=(typeof window!=='undefined')&&window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    this.reduced=!!rm;
+    this.state={
+      sort:(typeof localStorage!=='undefined'&&localStorage.getItem('desk_sort'))||'fit',
+      selectedId:null,
+      view:'triage',
+      stackFilter:'Pending',
+      curated:true,
+      curated:(typeof localStorage==='undefined')||localStorage.getItem('desk_curated')!=='0',
+      ledgerSort:'fit', ledgerDir:'desc',
+      jobs:this.realOrSeed(),
+      js:{},
+      showChanges:true,
+      highlightLine:null,
+      undoState:'idle', undoSeconds:5,
+      showError:false, trace:null, saved:false, showKeys:false, copiedCover:false, showBefore:false,
+      adding:false, addUrl:'', processing:false, procStep:0, addResult:null,
+      history:this.seedHistory(),
+    };
+    this.tier={Strong:'#2F4A3C',Stretch:'#C08A2D',Weak:'#9a9082'};
+  }
+  componentDidMount(){
+    const first=this.sortedPending()[0];
+    if(first) this.setState({selectedId:first.id});
+    this._key=(e)=>this.onKey(e);
+    window.addEventListener('keydown',this._key);
+    this._mountResume();
+    this._loadStatuses();
+    this._loadDynamic();
+  }
+
+  _loadDynamic(){
+    try{
+      fetch('api/jobs',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(p=>{
+        if(!p||!Array.isArray(p.data)||!p.data.length) return;
+        if(p.generatedAt&&p.generatedAt<=(window.__DESK_GENERATED||0)) return;
+        window.__DESK_DATA=p.data;
+        if(p.resume) window.__DESK_RESUME=p.resume;
+        if(p.meta) window.__DESK_META=p.meta;
+        window.__DESK_GENERATED=p.generatedAt||Date.now();
+        this.setState({jobs:p.data});
+        this._loadStatuses();
+        setTimeout(()=>{ const el=document.getElementById('desk-resume-slot'); if(el){el.__mountKey=null;} this._mountResume(); },50);
+      }).catch(()=>{});
+    }catch(e){}
+  }
+
+  _applyStatusMap(map){
+    if(!map||typeof map!=='object') return;
+    const known=new Set(this.state.jobs.map(j=>j.id));
+    this.setState(s=>{
+      const js={...s.js};
+      for(const [id,v] of Object.entries(map)){
+        if(!known.has(id)||!v) continue;
+        const cur={...(js[id]||{})};
+        if(v.status){ cur.decided=true; cur.status=v.status; cur.decidedAt=v.decidedAt||null; }
+        if(typeof v.cover==='string'){ cur.cover=v.cover; cur.coverEdited=true; }
+        if(typeof v.resumeHtml==='string'&&v.resumeHtml){ cur.resumeHtml=v.resumeHtml; cur.resumeEdited=true; }
+        js[id]=cur;
+      }
+      return {js};
+    });
+  }
+  _loadStatuses(){
+    try{ const raw=localStorage.getItem('desk-status-v2'); if(raw) this._applyStatusMap(JSON.parse(raw)); }catch(e){}
+    try{
+      fetch('api/status',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(map=>{ if(map) this._applyStatusMap(map); }).catch(()=>{});
+    }catch(e){}
+  }
+  _statusMap(){
+    const map={};
+    for(const j of this.state.jobs){
+      const js=this.jstate(j.id);
+      const entry={};
+      if(js.decided&&js.status){ entry.status=js.status; entry.decidedAt=js.decidedAt||Date.now(); }
+      if(js.coverEdited&&js.cover!=null) entry.cover=js.cover;
+      if(js.resumeEdited&&js.resumeHtml) entry.resumeHtml=js.resumeHtml;
+      if(Object.keys(entry).length) map[j.id]=entry;
+    }
+    return map;
+  }
+  _persistStatuses(){
+    clearTimeout(this._pt);
+    this._pt=setTimeout(()=>{
+      const map=this._statusMap();
+      try{ localStorage.setItem('desk-status-v2',JSON.stringify(map)); }catch(e){}
+      try{ fetch('api/status',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(map)}).catch(()=>{}); }catch(e){}
+    },350);
+  }
+  componentDidUpdate(){ this._mountResume(); }
+  componentWillUnmount(){ clearTimeout(this._undoT); clearInterval(this._undoI); window.removeEventListener('keydown',this._key); }
+
+  resumeSheetFor(j){
+    const base=(typeof window!=='undefined'&&window.__DESK_RESUME)||null;
+    if(!j) return base;
+    if(this.state.showBefore&&j.resumeHtml&&base) return base;
+    const js=this.jstate(j.id);
+    if(js.resumeHtml) return js.resumeHtml;
+    return j.resumeHtml||base;
+  }
+  _mountResume(){
+    const j=this.cur();
+    const el=document.getElementById('desk-resume-slot');
+    if(!el) return;
+    const before=this.state.showBefore&&!!(j&&j.resumeHtml);
+    const key=(j?j.id:'none')+'|'+(before?'before':'edit');
+    const sheet=this.resumeSheetFor(j);
+    if(!sheet) return;
+    const active=document.activeElement===el||el.contains(document.activeElement);
+    if(el.__mountKey!==key){ el.innerHTML=sheet; el.__mountKey=key; el.__setFor=sheet; }
+    else if(active){ el.__setFor=sheet; }
+    else if(el.__setFor!==sheet){ el.innerHTML=sheet; el.__setFor=sheet; }
+    const editable=!before&&!!(j&&j.resumeHtml);
+    el.setAttribute('contenteditable', editable?'true':'false');
+    el.spellcheck=false;
+    if(!el.__editWired){
+      el.__editWired=true;
+      el.addEventListener('input',()=>{
+        const jj=this.cur();
+        if(!jj||el.getAttribute('contenteditable')!=='true') return;
+        this.setJ(jj.id,{resumeHtml:el.innerHTML,resumeEdited:true});
+        this.flashSaved();
+        this._persistStatuses();
+      });
+    }
+  }
+  _esc(t){ return String(t==null?'':t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+  _cleanSheetHtml(html){
+    const d=document.createElement('div'); d.innerHTML=html;
+    d.querySelectorAll('[style]').forEach(n=>{
+      const st=n.getAttribute('style')||'';
+      if(/E7EAD8|231,\s*234,\s*216/i.test(st)){ n.style.background='transparent'; n.style.backgroundColor='transparent'; n.style.padding='0'; }
+    });
+    d.querySelectorAll('[contenteditable]').forEach(n=>n.removeAttribute('contenteditable'));
+    return d.innerHTML;
+  }
+  _pdfViaApi(html,name,fallback){
+    fetch('api/pdf',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({html})})
+      .then(r=>{ if(!r.ok||((r.headers.get('content-type')||'').indexOf('pdf')<0)) throw new Error('no pdf'); return r.blob(); })
+      .then(b=>{ const u=URL.createObjectURL(b); const a=document.createElement('a'); a.href=u; a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(u); a.remove();},800); })
+      .catch(()=>{ if(fallback) fallback(); });
+  }
+  pdfFileName(j){
+    if(this.state.showBefore&&j&&j.resumeHtml) return 'Resume (original) — Jordan Rivers.pdf';
+    const t=((j&&j.title)||'Resume').replace(/[\\/:*?"<>|]+/g,'-').replace(/\s{2,}/g,' ').trim(); return t+' — Jordan Rivers.pdf';
+  }
+  downloadResume(){
+    const j=this.cur(); if(!j) return;
+    const name=this.pdfFileName(j);
+    const before=this.state.showBefore&&!!j.resumeHtml;
+    const src=(!before&&j.pdfFile&&j.pdfFile.length)?j.pdfFile:'resume.pdf';
+    const openFallback=()=>{ try{window.open(src,'_blank');}catch(e){} };
+    const prebuilt=()=>{ fetch(src).then(r=>{ if(!r.ok) throw new Error(String(r.status)); return r.blob(); }).then(b=>{
+      const u=URL.createObjectURL(b); const a=document.createElement('a');
+      a.href=u; a.download=name; document.body.appendChild(a); a.click();
+      setTimeout(()=>{URL.revokeObjectURL(u); a.remove();},800);
+    }).catch(()=>{ if(!before&&j.cleanHtml){ this._pdfViaApi(j.cleanHtml,name,openFallback); } else { openFallback(); } }); };
+    const js=this.jstate(j.id);
+    if(!before&&js.resumeHtml){
+      // his custom edits — render them fresh so the PDF matches what he sees
+      this._pdfViaApi(this._cleanSheetHtml(js.resumeHtml), name, prebuilt);
+    } else { prebuilt(); }
+  }
+  downloadLetter(){
+    const j=this.cur(); if(!j) return;
+    const js=this.jstate(j.id);
+    const body=(js.cover!=null?js.cover:j.cover)||'';
+    const paras=body.split(/\n{2,}|\n/).map(t=>t.trim()).filter(Boolean)
+      .map(t=>'<p style="margin:0 0 14px;">'+this._esc(t)+'</p>').join('');
+    const html='<div style="font-family:Helvetica,Arial,sans-serif;font-size:12.5px;line-height:1.55;color:#111;max-width:640px;margin:0 auto;">'
+      +'<div style="text-align:center;margin-bottom:26px;"><div style="font-size:16px;font-weight:700;">Jordan Rivers</div>'
+      +'<div style="font-size:11.5px;">1720 Grevelia St, South Pasadena, CA 91030</div>'
+      +'<div style="font-size:11.5px;">jordan.rivers@example.com | (555) 010-0100</div></div>'
+      +'<div style="margin:0 0 18px;">'+this._esc(j.letterDate||'')+'</div>'
+      +'<div style="margin:0 0 14px;">'+this._esc(j.salutation||'Dear Hiring Manager,')+'</div>'
+      +paras
+      +'<p style="margin:18px 0 0;">Sincerely,</p><p style="margin:4px 0 0;">Jordan Rivers</p></div>';
+    const name='Cover Letter - '+((j.title||'letter').replace(/[\\/:*?"<>|]+/g,'-').replace(/\s{2,}/g,' ').trim())+' — Jordan Rivers.pdf';
+    this._pdfViaApi(html,name,()=>{ try{ const w=window.open('','_blank'); w.document.write('<title>'+this._esc(name)+'</title>'+html); w.document.close(); w.print(); }catch(e){} });
+  }
+  copyCover(){
+    const j=this.cur(); if(!j) return;
+    const js=this.jstate(j.id);
+    const body=(js.cover!=null?js.cover:j.cover)||'';
+    const so=(j.signoff1||'Warmly,')+'\n'+(j.signoff2||'Jordan');
+    const text=(j.salutation?j.salutation+'\n\n':'')+body+'\n\n'+so;
+    const done=()=>{ this.setState({copiedCover:true}); clearTimeout(this._ct); this._ct=setTimeout(()=>this.setState({copiedCover:false}),1600); };
+    const fallback=()=>{ try{ const ta=document.createElement('textarea'); ta.value=text; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); done(); }catch(e){} };
+    if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(text).then(done).catch(fallback); } else { fallback(); }
+  }
+
+  jstate(id){ return this.state.js[id]||{}; }
+  setJ(id,patch){ this.setState(s=>({js:{...s.js,[id]:{...(s.js[id]||{}),...patch}}})); }
+  curatedJobs(){ return this.state.jobs.filter(j=>!this.state.curated||j.shortlisted!==false); }
+  pending(){ return this.curatedJobs().filter(j=>!this.jstate(j.id).decided); }
+  stackJobs(){
+    const f=this.state.stackFilter||'Pending';
+    const a=this.curatedJobs().filter(j=>this.statusOf(j.id)===f);
+    if(this.state.sort==='fresh') a.sort((x,y)=>x.daysOld-y.daysOld); else a.sort((x,y)=>y.score-x.score);
+    return a;
+  }
+  sortedPending(){ const a=[...this.pending()]; if(this.state.sort==='fresh') a.sort((x,y)=>x.daysOld-y.daysOld); else a.sort((x,y)=>y.score-x.score); return a; }
+  cur(){ const p=this.stackJobs(); return p.find(j=>j.id===this.state.selectedId)||this.state.jobs.find(j=>j.id===this.state.selectedId)||p[0]||this.sortedPending()[0]||null; }
+
+  select(id){ this.setState({selectedId:id,showChanges:true,highlightLine:null,undoState:'idle',showError:false,trace:null,showBefore:false}); document.querySelectorAll('.deskcol').forEach(c=>c.scrollTop=0); }
+  advance(){ const p=this.sortedPending(); if(p.length===0){this.setState({selectedId:null});return;} this.select(p[0].id); }
+  finish(id,status){
+    this.setJ(id,{decided:true,status,decidedAt:Date.now()});
+    this.setState(s=>{const j=s.jobs.find(x=>x.id===id);return{history:[{id:'d'+id,title:j.title,company:j.company,status},...s.history]};});
+    setTimeout(()=>this.advance(),20);
+  }
+  approve(){
+    const j=this.cur(); if(!j) return;
+    if(j.applyVia==='Portal'){
+      // open synchronously in the click gesture — popup blockers kill deferred opens
+      const u=j.applyUrl||j.url||('https://example.com/apply/'+j.company.toLowerCase().replace(/\W+/g,'-'));
+      try{window.open(u,'_blank');}catch(e){}
+      if(this.reduced){ this.finish(j.id,'Queued'); return; }
+      this.setState({undoState:'stamp'});
+      setTimeout(()=>{ this.finish(j.id,'Queued'); this.setState({undoState:'idle'}); },620);
+      return;
+    }
+    if(this.reduced){this.startUndo();return;} this.setState({undoState:'stamp'}); setTimeout(()=>this.startUndo(),620);
+  }
+  startUndo(){ this.setState({undoState:'undo',undoSeconds:5}); this._undoI=setInterval(()=>this.setState(s=>({undoSeconds:Math.max(0,s.undoSeconds-1)})),1000); this._undoT=setTimeout(()=>this.commit(),5000); }
+  undo(){ clearTimeout(this._undoT); clearInterval(this._undoI); this.setState({undoState:'idle',undoSeconds:5}); }
+  commit(){ clearInterval(this._undoI); const j=this.cur(); if(!j) return; if(j.failTest){this.setState({undoState:'idle',showError:true});return;} if(j.applyVia==='Portal'){ const u=j.applyUrl||j.url||('https://example.com/apply/'+j.company.toLowerCase().replace(/\W+/g,'-')); try{window.open(u,'_blank');}catch(e){} this.finish(j.id,'Queued'); } else { this.finish(j.id,'Applied'); } this.setState({undoState:'idle'}); }
+  ignore(){ const j=this.cur(); if(j) this.finish(j.id,'Ignored'); }
+  save(){ const j=this.cur(); if(!j) return; this.setJ(j.id,{decided:true,status:'Saved',decidedAt:Date.now()}); this.setState(s=>({history:[{id:'s'+j.id,title:j.title,company:j.company,status:'Saved'},...s.history]})); setTimeout(()=>this.advance(),20); }
+
+  onCoverInput=(e)=>{ const id=this.cur().id; this.setJ(id,{cover:e.target.innerText,coverEdited:true,emailDesync:true}); this.flashSaved(); this._persistStatuses(); };
+  onSubjectInput=(e)=>{ this.setJ(this.cur().id,{subject:e.target.innerText}); };
+  onBodyInput=(e)=>{ this.setJ(this.cur().id,{body:e.target.innerText,bodyTouched:true}); };
+  flashSaved(){ this.setState({saved:true}); clearTimeout(this._st); this._st=setTimeout(()=>this.setState({saved:false}),1400); }
+  resync(){ const j=this.cur(); this.setJ(j.id,{body:null,bodyTouched:false,emailDesync:false}); }
+  resetCover(){ const j=this.cur(); if(!j) return; this.setJ(j.id,{cover:null,coverEdited:false,emailDesync:false}); this.flashSaved(); }
+  resetEmail(){ const j=this.cur(); if(!j) return; this.setJ(j.id,{subject:null,body:null,bodyTouched:false,emailDesync:false}); this.flashSaved(); }
+  diffSet(id,lineId,dec){ const dd={...(this.jstate(id).diff||{})}; dd[lineId]=dec; this.setJ(id,{diff:dd}); }
+  trace(title,text,source){ this.setState({trace:{title,text,source}}); }
+
+  normalizeLink(u){
+    u=(u||'').trim().replace(/[),.;]+$/,'');
+    if(!u) return null;
+    if(/^https?:\/\//i.test(u)) return u;
+    if(/^[\w][\w.-]*\.[a-z]{2,}([\/?#]|$)/i.test(u)) return 'https://'+u;  // pasted without protocol
+    return null;
+  }
+  submitAdd(){
+    if(this.state.processing) return;
+    const raw=this.parseAddUrls();
+    const links=raw.map(u=>this.normalizeLink(u)).filter(Boolean);
+    if(!links.length){
+      if(raw.length) this.setState({addResult:{ok:false, reason:'invalid'}});
+      return;
+    }
+    this.setState({processing:true, addResult:null});
+    fetch('api/inbox',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({links})})
+      .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); const ct=r.headers.get('content-type')||''; if(ct.indexOf('json')<0) throw new Error('auth'); return r.json(); })
+      .then(res=>{ if(!res||!res.ok) throw new Error('bad response'); this.setState({processing:false, addUrl:'', addResult:{ok:true, queued:res.queued||0, dup:res.duplicates||0}}); })
+      .catch(e=>{ this.setState({processing:false, addResult:{ok:false, reason:(e&&e.message==='auth')?'auth':'server'}}); });
+  }
+  parseAddUrls(){ return (this.state.addUrl||'').split(/[\s,\n]+/).map(u=>u.trim()).filter(Boolean); }
+
+  onKey(e){
+    if(e.metaKey||e.ctrlKey||e.altKey) return; // never hijack browser shortcuts (Cmd+S etc.)
+    if(e.target&&e.target.closest&&e.target.closest('[contenteditable="true"]')) return;
+    const tag=(e.target&&e.target.tagName||'').toLowerCase();
+    if(tag==='input'||tag==='textarea') return;
+    const k=e.key.toLowerCase();
+    if(k==='a'){e.preventDefault();this.toggleStatus('Applied');}
+    else if(k==='x'){e.preventDefault();this.toggleStatus('Ignored');}
+    else if(k==='i'){e.preventDefault();this.toggleStatus('Interested');}
+    else if(k==='e'){e.preventDefault();const el=document.querySelector('[aria-label=\"Cover letter, editable\"]');if(el)el.focus();}
+    else if(k==='j'||e.key==='ArrowRight'||e.key==='ArrowDown'){e.preventDefault();this.cycle(1);}
+    else if(k==='k'||e.key==='ArrowLeft'||e.key==='ArrowUp'){e.preventDefault();this.cycle(-1);}
+  }
+  cycle(dir){ const p=this.stackJobs(); const cur=this.cur(); const i=p.findIndex(j=>j.id===(cur&&cur.id)); const ni=(i+dir+p.length)%p.length; if(p[ni]) this.select(p[ni].id); }
+  sortLedger(col){ this.setState(s=>({ ledgerSort:col, ledgerDir: s.ledgerSort===col ? (s.ledgerDir==='asc'?'desc':'asc') : ((col==='fit'||col==='follow')?'desc':'asc') })); }
+  statusOrder(){ return ['Pending','Interested','Applied','Interviewing','Ignored','Not interested']; }
+  statusColors(){ return {Pending:'#6B6258',Interested:'#C08A2D',Applied:'#2F4A3C',Interviewing:'#B4472E',Ignored:'#9a9082','Not interested':'#9a5a44'}; }
+  statusOf(id){ const js=this.jstate(id); return js.decided?js.status:'Pending'; }
+  setStatus(id,status){
+    if(status==='Pending'){ this.setJ(id,{decided:false,status:null,decidedAt:null}); this._persistStatuses(); return; }
+    const js=this.jstate(id);
+    // decidedAt anchors the follow-up clock — set when first applying, keep on later transitions
+    const stamp=(status==='Applied')?(js.status==='Applied'&&js.decidedAt?js.decidedAt:Date.now()):(js.decidedAt||Date.now());
+    this.setJ(id,{decided:true,status,decidedAt:stamp});
+    this._persistStatuses();
+  }
+  toggleStatus(status){
+    const j=this.cur(); if(!j) return;
+    const list=this.stackJobs();
+    const idx=list.findIndex(x=>x.id===j.id);
+    const next=(idx>=0&&list.length>1)?list[(idx+1)%list.length]:null;
+    const newStatus=this.statusOf(j.id)===status?'Pending':status;
+    this.setStatus(j.id,newStatus);
+    if(newStatus!==this.state.stackFilter&&next&&next.id!==j.id) this.setState({selectedId:next.id});
+  }
+  cycleStatus(id){
+    const order=this.statusOrder();
+    const next=order[(order.indexOf(this.statusOf(id))+1)%order.length];
+    this.setStatus(id,next);
+  }
+
+  renderVals(){
+    const s=this.state;
+    const pend=this.sortedPending();
+    const total=s.jobs.length;
+    const reviewed=total-this.pending().length;
+    const allCaught=this.pending().length===0;
+    const sel=this.cur();
+    const v={
+      progressLabel: allCaught?'ALL CAUGHT UP':(this.pending().length+' OF '+total+' TO REVIEW'),
+      progressPct: total?Math.round((reviewed/total)*100)+'%':'0%',
+      allCaught, hasJob:!!sel&&!allCaught,
+    };
+    // view toggle (Stack vs All-jobs ledger)
+    v.isTriage=s.view==='triage'; v.isLedger=s.view==='ledger';
+    v.showEmpty=v.isTriage&&v.allCaught&&(s.stackFilter||'Pending')==='Pending';
+    v.showTriage=v.isTriage&&v.hasJob&&!v.showEmpty;
+    v.showLedger=v.isLedger;
+    v.onViewTriage=()=>this.setState({view:'triage'});
+    v.onViewLedger=()=>this.setState({view:'ledger'});
+    v.triageTabBg=v.isTriage?'#221E1A':'transparent'; v.triageTabColor=v.isTriage?'#F4EFE4':'#6B6258';
+    v.ledgerTabBg=v.isLedger?'#221E1A':'transparent'; v.ledgerTabColor=v.isLedger?'#F4EFE4':'#6B6258';
+    {
+      const SC=this.statusColors();
+      const SR={Pending:0,Interested:1,Applied:2,Interviewing:3,Ignored:4,'Not interested':5}; const DAY=86400000;
+      const mk=(status,decidedAt)=>{ if(status==='Applied'&&decidedAt){ const d=Math.floor((Date.now()-decidedAt)/DAY); if(d>=7) return {t:d+'d — follow up',due:true,days:d}; if(d>=1) return {t:d+'d ago',due:false,days:d}; return {t:'today',due:false,days:0}; } return {t:'',due:false,days:-1}; };
+      const row=(o)=>{ const f=mk(o.status,o.decidedAt); const sc=(typeof o.score==='number')?o.score:-1; return {manual:!!o.manual,title:o.title,company:o.company,location:o.location||'—',score:(o.score==null?'':o.score),tierColor:o.tierColor||'#D8CFBE',status:o.status,statusColor:SC[o.status]||'#6B6258',followUp:f.t,followDue:f.due,followColor:f.due?'#B4472E':'#9a9082',rowCursor:o.onOpen?'pointer':'default',onOpen:o.onOpen||(()=>{}),statusCursor:o.onStatus?'pointer':'default',statusTitle:o.onStatus?'Click to change status':'',onStatus:o.onStatus||(()=>{}),_t:(o.title||'').toLowerCase(),_loc:(o.location||'').toLowerCase(),_score:sc,_status:(SR[o.status]==null?9:SR[o.status]),_days:f.days}; };
+      const rj=s.jobs.map(j=>{ return row({manual:j.manual,title:j.title,company:j.company,location:j.location,score:j.score,tierColor:this.tier[j.tier],status:this.statusOf(j.id),decidedAt:this.jstate(j.id).decidedAt,
+        onOpen:()=>{ this.select(j.id); this.setState({view:'triage'}); },
+        onStatus:(e)=>{ if(e&&e.stopPropagation)e.stopPropagation(); this.cycleStatus(j.id); }}); });
+      const _histMap={Queued:'Applied',Saved:'Interested','Heard back':'Interviewing'};
+      const rh=s.history.filter(h=>String(h.id).indexOf('h')===0).map(h=>row({title:h.title,company:h.company,location:'—',score:'',tierColor:'#D8CFBE',status:_histMap[h.status]||h.status,decidedAt:h.decidedAt}));
+      const rows=rj.concat(rh);
+      const KEY={role:'_t',location:'_loc',fit:'_score',status:'_status',follow:'_days'}; const k=KEY[s.ledgerSort]||'_score'; const dir=s.ledgerDir==='asc'?1:-1;
+      rows.sort((a,b)=>{ const x=a[k],y=b[k]; if(typeof x==='string'&&typeof y==='string') return x.localeCompare(y)*dir; return ((x<y?-1:x>y?1:0))*dir; });
+      v.ledgerRows=rows; v.ledgerCount=rows.length; v.followCount=rows.filter(r=>r.followDue).length;
+      const arrow=(c)=> s.ledgerSort===c ? (s.ledgerDir==='asc'?' ↑':' ↓') : '';
+      v.onSortRole=()=>this.sortLedger('role'); v.onSortLoc=()=>this.sortLedger('location'); v.onSortFit=()=>this.sortLedger('fit'); v.onSortStatus=()=>this.sortLedger('status'); v.onSortFollow=()=>this.sortLedger('follow');
+      v.sortRole=arrow('role'); v.sortLoc=arrow('location'); v.sortFit=arrow('fit'); v.sortStatus=arrow('status'); v.sortFollow=arrow('follow');
+    }
+    // nav
+    const _stk=this.stackJobs(); const idx=_stk.findIndex(j=>j.id===(sel&&sel.id));
+    v.posLabel=_stk.length?((idx<0?1:idx+1)+' of '+_stk.length):'';
+    v.onPrev=()=>this.cycle(-1); v.onNext=()=>this.cycle(1); v.showKeys=s.showKeys; v.onToggleKeys=()=>this.setState(st=>({showKeys:!st.showKeys}));
+    // add-listing
+    v.addOpen=s.adding; v.processing=s.processing; v.notProcessing=!s.processing;
+    v.addUrlShown=s.addUrl;
+    const _addUrls=this.parseAddUrls();
+    v.addCount=_addUrls.length;
+    v.addSummary=_addUrls.length>1?(_addUrls.length+' links'):(s.addUrl||'');
+    v.procHeader=_addUrls.length>1?('Reading '+_addUrls.length+' links…'):'Reading your link…';
+    v.onAddOpen=()=>this.setState({adding:true,addUrl:'',processing:false,addResult:null});
+    v.onAddClose=()=>{ if(!this.state.processing) this.setState({adding:false,addUrl:'',addResult:null}); };
+    v.onAddBack=()=>this.setState({addResult:null});
+    v.onAddStop=(e)=>e.stopPropagation();
+    v.onUrlInput=(e)=>this.setState({addUrl:e.target.value});
+    v.onSubmitAdd=()=>this.submitAdd();
+    v.addDisabled=!s.addUrl.trim();
+    v.addBtnBg=s.addUrl.trim()?'#2F4A3C':'#9aa79f';
+    const ar=s.addResult;
+    v.addInput=!s.processing&&!ar;
+    v.addQueued=!!(ar&&ar.ok);
+    v.addFailed=!!(ar&&ar.ok===false);
+    v.addQueuedMsg=ar&&ar.ok?((ar.queued===1?'1 link':ar.queued+' links')+' handed to the engine'+(ar.dup?' ('+ar.dup+' already queued — it will still show up)':'')) : '';
+    v.addFailMsg=(ar&&ar.reason==='invalid')?"That didn't look like a link — paste the full job page address (it can start with www.)."
+      :(ar&&ar.reason==='auth')?'Your session expired — reload the page, log back in, and paste the links again.'
+      :'The processing service didn\u2019t answer. Your links weren\u2019t lost — copy them somewhere safe and try again in a minute.';
+
+    // curated toggle
+    v.curatedMark=s.curated?'☑':'☐';
+    v.onToggleCurated=()=>{ this.setState(st=>{ const c=!st.curated; try{localStorage.setItem('desk_curated',c?'1':'0');}catch(e){} return {curated:c}; }); };
+    v.curatedCount=this.state.jobs.filter(j=>j.shortlisted!==false).length;
+    v.totalCount=this.state.jobs.length;
+    v.curatedLabel='Curated by fit — '+v.curatedCount+' of '+v.totalCount;
+    // stack filter chips
+    const scol2=this.statusColors();
+    v.filterChips=this.statusOrder().map(st=>{
+      const n=this.curatedJobs().filter(j=>this.statusOf(j.id)===st).length;
+      const active=(s.stackFilter||'Pending')===st;
+      return {label:(st==='Pending'?'Queue':st)+' '+n, active,
+        bg:active?'#221E1A':'transparent', color:active?'#F4EFE4':'#6B6258',
+        onTap:()=>{ const first=this.curatedJobs().filter(j=>this.statusOf(j.id)===st).sort((x,y)=>y.score-x.score)[0];
+          this.setState({stackFilter:st, selectedId:first?first.id:null}); }};
+    });
+    // pills
+    const stack=this.stackJobs();
+    v.stackPills=stack.map(j=>{
+      const js=this.jstate(j.id); const active=sel&&sel.id===j.id;
+      return {title:j.title,score:j.score,tierColor:this.tier[j.tier],edited:!!js.coverEdited,fresh:!!js.fresh,manual:!!j.manual,
+        current:active?'true':'false',
+        bg:active?'#221E1A':'#FBF8F1', color:active?'#F4EFE4':'#221E1A', border:active?'#221E1A':'#D8CFBE',
+        aria:j.title+', fit '+j.score, onSelect:()=>this.select(j.id)};
+    });
+
+    // history / empty
+    const hc={Applied:'#2F4A3C',Queued:'#B4472E',Ignored:'#6B6258',Saved:'#C08A2D'};
+    const _sc=(st)=>s.jobs.filter(j=>this.statusOf(j.id)===st).length;
+    v.emptyStats=reviewed+' reviewed · '+_sc('Interested')+' interested · '+_sc('Applied')+' applied · '+_sc('Interviewing')+' interviewing · '+_sc('Ignored')+' ignored · '+_sc('Not interested')+' not interested';
+    v.onRefresh=()=>{};
+
+    if(sel){
+      const j=sel, js=this.jstate(j.id);
+      v.job={company:j.company,title:j.title,monogram:j.monogram,score:j.score,tier:j.tier,tierColor:this.tier[j.tier],why:j.why,applyLabel:j.applyVia==='Email'?'Apply by email':'Company portal',diffSummary:j.diffSummary,letterDate:j.letterDate,salutation:j.salutation,emailTo:j.emailTo,attachment:j.attachment,about:j.about,isManual:!!j.manual};
+      v.gaps=j.gaps;
+      v.hasUrl=!!j.url; v.jobUrl=j.url||'';
+      v.hasAbout=!!(j.about&&j.about.trim());
+      v.hasBenefits=!!(j.benefits&&j.benefits.trim());
+      const _sheet=this.resumeSheetFor(j);
+      v.resumeMode=!!_sheet; v.diffMode=!_sheet;
+      v.pdfName=this.pdfFileName(j);
+      v.onDownloadPdf=()=>this.downloadResume();
+      const _before=s.showBefore&&!!j.resumeHtml;
+      v.hasBefore=!!(j.resumeHtml&&(typeof window!=='undefined'&&window.__DESK_RESUME));
+      v.beforeMark=_before?'☑':'☐';
+      v.onToggleBefore=()=>this.setState(st=>({showBefore:!st.showBefore}));
+      v.resumeTitle=_before?'Resume — original (before)':(j.resumeHtml?'Resume — tailored · tap to edit':'Resume — ready to submit');
+      v.resumeSummary=j.resumeHtml?(j.diffSummary||''):'';
+      v.hasResumeSummary=!!(j.resumeHtml&&j.diffSummary&&!_before);
+      v.resumeNote=_before?'His original resume, unchanged — untick “Before” to see the version tailored to this job.':(j.resumeNote||'This is the exact PDF the download button saves — his real resume, nothing invented.');
+      v.onCopyCover=()=>this.copyCover();
+      v.onDownloadLetter=()=>this.downloadLetter();
+      v.copyLabel=s.copiedCover?'Copied ✓':'Copy letter ⧉';
+      v.copyBg=s.copiedCover?'#2F4A3C':'#F4EFE4'; v.copyColor=s.copiedCover?'#F4EFE4':'#221E1A';
+      v.signoff1=j.signoff1||'Warmly,'; v.signoff2=j.signoff2||'Jordan';
+      v.onViewBase=()=>this.trace('Your base resume','Measured against the resume you uploaded Mar 3 — the master copy nothing changes against without showing you.','base_resume.pdf');
+
+      const facts=[
+        {key:'location',label:'Location',value:j.location},
+        {key:'pay',label:'Pay',value:j.payListed?j.pay:'Not listed',present:j.payListed,belowMin:j.belowMin,applyAccent:j.belowMin},
+        {key:'hours',label:'Hours / Type',value:j.hoursType},
+        {key:'seniority',label:'Seniority',value:j.seniority,lowConf:j.seniorityLow},
+        {key:'posted',label:'Posted',value:j.postedFacts},
+        {key:'apply',label:'Apply via',value:j.applyVia,applyAccent:true},
+      ];
+      v.factChips=facts.map(f=>({
+        label:f.label,value:f.value,
+        valueColor:f.value==='Not listed'?'#9a9082':(f.belowMin?'#B4472E':'#221E1A'),
+        underline:f.lowConf?'1px dotted #9a7d2a':'none',
+        belowMin:!!f.belowMin, applyAccent:!!f.applyAccent, aria:f.label+': '+f.value,
+        onTap:()=>{ if(f.lowConf){ this.trace('Low-confidence reading','The agent wasn\u2019t sure about seniority — the posting is vague. Nothing is sent on a guess.',j.seniorityNote||'inferred'); return;} const li=j.factLine&&j.factLine[f.key]; if(li!=null){ this.setState({highlightLine:li}); const col=document.querySelectorAll('.deskcol')[0]; if(col){const ps=col.querySelectorAll('p'); if(ps[li]) col.scrollTo({top:Math.max(0,ps[li].offsetTop-90),behavior:this.reduced?'auto':'smooth'});} } else { this.trace('From the listing page','This detail was captured from the full posting page \u2014 the excerpt shown here may not include the exact line. Open the original listing to see it in context.','listing'); } },
+      }));
+
+      v.postingParas=j.posting.map((b,i)=>{
+        const blk=(typeof b==='string')?{kind:'p',text:b}:(b||{kind:'p',text:''});
+        const hot=s.highlightLine===i;
+        return {text:blk.text, isH:blk.kind==='h', isLi:blk.kind==='li', isP:blk.kind!=='h'&&blk.kind!=='li',
+          bg:hot?'#E7EAD8':'transparent', pad:hot?'8px 10px':'0'};
+      });
+
+      // cover
+      v.coverRef=()=>{};
+      v.coverInitial=js.cover!=null?js.cover:j.cover;
+      v.coverEdited=!!js.coverEdited; v.savedTag=s.saved?' · saved':'';
+      v.onCoverInput=this.onCoverInput; v.onResetCover=()=>this.resetCover();
+      v.onTraceCover=()=>this.trace('Traceable, line by line','Each paragraph maps to a real resume bullet — the Atlas migration, the 40% checkout win, the mentoring. Tap any resume line to follow the thread.','nothing here is invented');
+
+      // resume
+      v.changesBg=s.showChanges?'#221E1A':'#F4EFE4'; v.changesColor=s.showChanges?'#F4EFE4':'#6B6258';
+      v.cleanBg=!s.showChanges?'#221E1A':'#F4EFE4'; v.cleanColor=!s.showChanges?'#F4EFE4':'#6B6258';
+      v.onShowChanges=()=>this.setState({showChanges:true}); v.onCleanView=()=>this.setState({showChanges:false});
+      const dd=js.diff||{};
+      v.diffLines=j.diff.filter(d=>s.showChanges?true:(d.type!=='remove')).map(d=>{
+        const dec=dd[d.id]; let kind=d.type;
+        if(d.type==='add'&&dec==='reverted') kind='reverted-add';
+        const sm={
+          context:{bg:'transparent',text:'#6B6258',lead:'',leadColor:'',strike:'none'},
+          add:{bg:s.showChanges?'#E7EAD8':'transparent',text:'#2c3d29',lead:'+',leadColor:'#2F4A3C',strike:'none'},
+          remove:{bg:'#F1DCD2',text:'#9a5a44',lead:'\u2212',leadColor:'#9a5a44',strike:'line-through'},
+          'reverted-add':{bg:'transparent',text:'#b0a89a',lead:'+',leadColor:'#c2b9a4',strike:'line-through'},
+        };
+        const st2=sm[kind]||sm.context;
+        const editable=(d.type==='add'||d.type==='remove')&&s.showChanges;
+        return {text:d.text,bg:st2.bg,textColor:st2.text,lead:st2.lead,leadColor:st2.leadColor,strike:st2.strike,showControls:editable&&!dec,onAccept:()=>this.diffSet(j.id,d.id,'kept'),onRevert:()=>this.diffSet(j.id,d.id,'reverted'),onTrace:()=>d.mapsTo?this.trace('Where this comes from',d.text,'maps to '+d.mapsTo):null};
+      });
+      v.onDownloadResume=()=>this.trace('Resume preview',j.diffSummary+'. The PDF mirrors what you see — kept edits in, reverted out.',j.attachment);
+
+      // email
+      const hasEmail=j.applyVia==='Email';
+      v.emailLane=hasEmail; v.portalLane=!hasEmail;
+      v.subjectInitial=js.subject!=null?js.subject:j.subject;
+      v.bodyInitial=(js.bodyTouched&&js.body!=null)?js.body:(js.cover!=null?js.cover:j.cover);
+      v.emailDesynced=!!js.emailDesync&&js.bodyTouched;
+      v.onSubjectInput=this.onSubjectInput; v.onBodyInput=this.onBodyInput; v.onResync=()=>this.resync();
+      v.emailEdited=!!(js.subject!=null||js.bodyTouched); v.onResetEmail=()=>this.resetEmail();
+      v.onPreviewAttach=()=>this.trace('Attachment',j.attachment+' — the tailored resume, ready to send.','PDF · 1 page');
+
+      const curStatus=this.statusOf(j.id);
+      const scol=this.statusColors();
+      v.statusButtons=['Interested','Applied','Interviewing','Ignored','Not interested'].map(st=>{
+        const active=curStatus===st;
+        return {label:st,active,
+          bg:active?scol[st]:'#F4EFE4', color:active?'#F4EFE4':'#6B6258',
+          border:active?scol[st]:'#D8CFBE',
+          aria:st+(active?' — current status, tap to clear':''),
+          onTap:()=>this.toggleStatus(st)};
+      });
+      v.portalHref=j.applyUrl||j.url||'';
+      v.hasPortal=!!v.portalHref;
+      v.portalLabel=(j.applyVia==='Portal')?'Open portal ↗':'Open listing ↗';
+      v.showStamp=false; v.showUndo=false; v.showActions=true; v.showError=false;
+
+      v.tracePopover=!!s.trace; v.traceTitle=s.trace?s.trace.title:''; v.traceText=s.trace?s.trace.text:''; v.traceSource=s.trace?s.trace.source:'';
+      v.onCloseTrace=()=>this.setState({trace:null}); v.onStop=(e)=>e.stopPropagation();
+    } else {
+      v.showActions=true; v.showStamp=false; v.showUndo=false; v.tracePopover=false;
+    }
+    return v;
+  }
+
+
+  realOrSeed(){ return (typeof window!=='undefined'&&window.__DESK_DATA&&window.__DESK_DATA.length) ? window.__DESK_DATA : this.seedJobs(); }
+  seedHistory(){
+    if(typeof window!=='undefined'&&window.__DESK_DATA&&window.__DESK_DATA.length) return [];
+    const D=86400000, now=Date.now();
+    return [
+      {id:'h1',title:'Staff Frontend Engineer',company:'Lumen',status:'Applied',decidedAt:now-9*D},
+      {id:'h2',title:'Web Engineer',company:'Tidepool',status:'Queued',decidedAt:now-8*D},
+      {id:'h3',title:'Frontend Lead',company:'Garnet',status:'Ignored',decidedAt:now-11*D},
+    ];
+  }
+  seedJobs(){
+    return [
+      {id:'maple',title:'Senior Frontend Engineer',company:'Maple & Co',monogram:'M',about:'A 40-person remote commerce company, employee-owned since 2021 — known for shipping slowly and keeping engineers close to the product.',location:'Remote',type:'Full-time',pay:'$130\u2013155k',payListed:true,belowMin:false,hoursType:'40 hrs/wk · Full-time',seniority:'Senior (6+ yrs)',seniorityLow:false,posted:'Jun 24',postedAgo:'2d ago',postedFacts:'Jun 24 · 2d ago',daysOld:2,applyVia:'Email',mayBeClosed:false,score:92,tier:'Strong',
+        why:'You\u2019ve shipped exactly the kind of customer-facing React work they\u2019re hiring for \u2014 and your checkout rebuild is the story they need.',
+        gaps:['No Kubernetes','GraphQL: light'],factLine:{location:0,pay:3,hours:3,seniority:1,posted:0,apply:5},
+        posting:['Maple & Co is a remote-first commerce company. We\u2019re looking for a Senior Frontend Engineer to own the storefront experience used by two million shoppers a month.','You\u2019ll lead front-of-house React work, mentor two mid-level engineers, and partner closely with design on a slow, deliberate redesign of the checkout flow.','We care about craft over speed. Our team writes tested, accessible, legible code and ships when it\u2019s right.','Compensation is $130\u2013155k plus equity. Fully remote within North American time zones. Apply by email to the hiring manager \u2014 a short note and your resume is plenty.'],
+        diffSummary:'7 lines tailored for this role',
+        diff:[{id:'l1',type:'context',text:'Jordan Rivers \u2014 Frontend Engineer, 6 years building customer-facing web apps.'},{id:'l2',type:'remove',text:'Worked on various web projects using JavaScript and React.',mapsTo:'your 2021 summary line'},{id:'l3',type:'add',text:'Led the rebuild of Northbeam\u2019s checkout flow in React, cutting load time 40% and lifting conversion 6%.',mapsTo:'your 2021 role at Northbeam'},{id:'l4',type:'add',text:'Mentored two mid-level engineers through their first production launches.',mapsTo:'your 2022 mentoring notes'},{id:'l5',type:'context',text:'Built a component library now used across four internal products.'},{id:'l6',type:'remove',text:'Familiar with accessibility best practices.',mapsTo:'your skills list'},{id:'l7',type:'add',text:'Drove WCAG AA compliance across the storefront, including a full keyboard-navigation pass.',mapsTo:'your 2023 a11y audit'}],
+        letterDate:'June 26, 2026',salutation:'Dear Maple & Co hiring team,',
+        cover:'I read that you\u2019re redesigning checkout slowly and deliberately, and something in me relaxed. The best work I\u2019ve done was a checkout rebuild at Northbeam \u2014 not because it was fast, but because we let it take the time it needed and shipped something we were proud of.\n\nI\u2019d bring that same patience here, plus the habit of leaving the codebase more legible than I found it. Mentoring two engineers through their first launches taught me that craft is contagious when you make room for it.\n\nIf the storefront is the front door, I\u2019d like to be the person who keeps it honest, fast, and kind to use.',
+        emailTo:'hiring@mapleandco.com',subject:'Senior Frontend Engineer \u2014 Jordan Rivers',attachment:'resume_sample_maple.pdf',failTest:false},
+      {id:'cartograph',title:'Product Engineer',company:'Cartograph',monogram:'C',about:'A nine-person Austin studio building mapping tools for field researchers. Small, profitable, and proudly unhurried.',location:'Austin · Hybrid',type:'Full-time',pay:'$120\u2013140k',payListed:true,belowMin:false,hoursType:'Full-time',seniority:'Mid\u2013Senior',seniorityLow:false,posted:'Jun 22',postedAgo:'4d ago',postedFacts:'Jun 22 · 4d ago',daysOld:4,applyVia:'Portal',mayBeClosed:false,score:88,tier:'Strong',
+        why:'A small product team that wants engineers who talk to users \u2014 you\u2019ve done exactly that, and you\u2019d thrive without a thick spec to hide behind.',
+        gaps:['Onsite 2 days/wk','No Rust'],factLine:{location:1,pay:3,hours:1,seniority:1,posted:0,apply:3},
+        posting:['Cartograph builds mapping tools for field researchers. We\u2019re a team of nine in Austin, hybrid two days a week.','We want a Product Engineer who treats the user interview as part of the job \u2014 someone comfortable owning a feature from sketch to ship.','Our stack is React, TypeScript, and a little Rust on the edges. You don\u2019t need the Rust; you need curiosity.','Pay is $120\u2013140k. Apply through our portal \u2014 we read every application by hand.'],
+        diffSummary:'5 lines tailored for this role',
+        diff:[{id:'c1',type:'context',text:'Jordan Rivers \u2014 Frontend Engineer who ships features end to end.'},{id:'c2',type:'remove',text:'Collaborated with product managers on requirements.',mapsTo:'your 2020 summary'},{id:'c3',type:'add',text:'Ran 20+ user interviews and turned them directly into shipped features at Northbeam.',mapsTo:'your 2020 discovery work'},{id:'c4',type:'add',text:'Comfortable owning a feature from rough sketch through production.',mapsTo:'your 2022 ownership notes'},{id:'c5',type:'context',text:'Strong with React and TypeScript across four products.'}],
+        letterDate:'June 26, 2026',salutation:'Hello Cartograph,',
+        cover:'Nine people, two days in the office, and an expectation that engineers actually talk to users \u2014 that\u2019s the kind of team where I do my best work.\n\nAt Northbeam I ran more than twenty user interviews myself, because the feature briefs were never as honest as the people using the thing. I\u2019d rather sit with the ambiguity for an afternoon than build the wrong thing quickly.\n\nI don\u2019t know Rust yet, but I\u2019ve picked up stranger things on curiosity alone. I\u2019d love to help researchers in the field find their way.',
+        emailTo:'',subject:'',attachment:'resume_sample_cartograph.pdf',failTest:false},
+      {id:'bellwether',title:'UX Engineer (Contract)',company:'Bellwether Studio',monogram:'B',about:'A boutique design studio of six, taking on a handful of ambitious product engagements a year.',location:'Remote',type:'Contract',pay:'',payListed:false,belowMin:false,hoursType:'~30 hrs/wk · 6-mo contract',seniority:'Senior',seniorityLow:false,posted:'Jun 19',postedAgo:'7d ago',postedFacts:'Jun 19 · 7d ago',daysOld:7,applyVia:'Email',mayBeClosed:false,score:74,tier:'Stretch',
+        why:'A prototyping-heavy contract that rewards taste and speed \u2014 lighter on deep systems work, but right in your wheelhouse for craft.',
+        gaps:['Pay undisclosed','Contract, not perm','No Figma plugins'],factLine:{location:0,pay:null,hours:1,seniority:1,posted:0,apply:2},
+        posting:['Bellwether is a small design studio. We need a UX Engineer for a six-month contract, roughly 30 hours a week, fully remote.','The work is prototyping \u2014 fast, high-fidelity, often thrown away. We value taste and speed over architecture here.','Reach out by email with a portfolio or a few links. Rate is negotiable depending on availability.'],
+        diffSummary:'4 lines tailored for this role',
+        diff:[{id:'b1',type:'context',text:'Jordan Rivers \u2014 engineer with a designer\u2019s eye.'},{id:'b2',type:'remove',text:'Built scalable production systems.',mapsTo:'your 2021 summary'},{id:'b3',type:'add',text:'Prototyped a dozen interaction concepts in a week to settle a contentious redesign.',mapsTo:'your 2022 prototyping sprint'},{id:'b4',type:'context',text:'Fluent in motion, layout, and the details that make a prototype feel real.'}],
+        letterDate:'June 26, 2026',salutation:'Hi Bellwether,',
+        cover:'Fast, high-fidelity, often thrown away \u2014 that describes the most fun I\u2019ve had as an engineer. I once built a dozen interaction concepts in a week just to end an argument about a redesign, and the throwaway ones taught us the most.\n\nI work quickly but not carelessly; the speed comes from knowing which details actually carry the feeling. Happy to talk rate once I understand the scope.',
+        emailTo:'studio@bellwether.design',subject:'UX Engineer contract \u2014 Jordan Rivers',attachment:'resume_sample_bellwether.pdf',failTest:true},
+      {id:'ferro',title:'Design Technologist',company:'Ferro Labs',monogram:'F',about:'An early-stage San Francisco hardware startup pairing industrial designers with a small in-house software team.',location:'San Francisco · Onsite',type:'Full-time',pay:'$115\u2013135k',payListed:true,belowMin:false,hoursType:'40 hrs/wk · Full-time',seniority:'Mid-level',seniorityLow:true,seniorityNote:'posting only says \u201Cexperienced\u201D, not a level',posted:'May 23',postedAgo:'34d ago',postedFacts:'May 23 · 34d ago',daysOld:34,applyVia:'Portal',mayBeClosed:true,score:71,tier:'Stretch',
+        why:'Strong craft match, but it\u2019s onsite in SF and the posting is over a month old \u2014 worth a look only if a move is on the table.',
+        gaps:['Onsite SF','Likely stale','5 yrs vs 7 asked'],factLine:{location:0,pay:3,hours:1,seniority:1,posted:0,apply:3},
+        posting:['Ferro Labs is a hardware startup in San Francisco. This role is fully onsite in our SoMa office.','We want an experienced Design Technologist to bridge our industrial design and software teams.','Seven years of experience preferred. Strong portfolio required.','Compensation $115\u2013135k. Apply via our careers portal.'],
+        diffSummary:'3 lines tailored for this role',
+        diff:[{id:'f1',type:'context',text:'Jordan Rivers \u2014 engineer who sits comfortably between design and code.'},{id:'f2',type:'add',text:'Bridged design and engineering on a shared component system used by both teams.',mapsTo:'your 2023 design-systems work'},{id:'f3',type:'context',text:'Five years of frontend experience, design-systems focused.'}],
+        letterDate:'June 26, 2026',salutation:'Dear Ferro Labs,',
+        cover:'The space between industrial design and software is where I\u2019m most useful \u2014 I\u2019ve spent years being the translator who keeps both sides honest.\n\nI have five years rather than the seven you mention, but the work I\u2019ve done in design systems is exactly the bridge you\u2019re describing. I\u2019d want to talk openly about the onsite expectation before we go far.',
+        emailTo:'',subject:'',attachment:'resume_sample_ferro.pdf',failTest:false},
+      {id:'quill',title:'Frontend Engineer, Part-time',company:'Quill',monogram:'Q',about:'A two-person bootstrapped company making writing software for novelists, funded entirely by its readers.',location:'Remote',type:'Part-time',pay:'$60/hr',payListed:true,belowMin:false,hoursType:'20 hrs/wk · Part-time',seniority:'Senior',seniorityLow:false,posted:'Jun 25',postedAgo:'1d ago',postedFacts:'Jun 25 · 1d ago',daysOld:1,applyVia:'Email',mayBeClosed:false,score:81,tier:'Strong',
+        why:'A flexible 20-hour week with a writing-tools team that cares about typography \u2014 a calm, high-craft fit if part-time suits you right now.',
+        gaps:['Part-time only','Small team'],factLine:{location:0,pay:2,hours:1,seniority:1,posted:0,apply:3},
+        posting:['Quill makes writing software for novelists. We\u2019re hiring a part-time Frontend Engineer, 20 hours a week, remote.','Typography and reading comfort are the whole product. We need someone who sweats line-height.','Rate is $60/hour. Apply by email \u2014 tell us about a piece of interface typography you\u2019re proud of.'],
+        diffSummary:'4 lines tailored for this role',
+        diff:[{id:'q1',type:'context',text:'Jordan Rivers \u2014 frontend engineer who cares about reading.'},{id:'q2',type:'remove',text:'Implemented UI components per design specs.',mapsTo:'your 2022 summary'},{id:'q3',type:'add',text:'Tuned the reading typography of a long-form editor \u2014 line-height, measure, and rhythm \u2014 until writers stopped noticing it.',mapsTo:'your 2022 editor work'},{id:'q4',type:'context',text:'Comfortable owning small, sharp products end to end.'}],
+        letterDate:'June 26, 2026',salutation:'Hello Quill,',
+        cover:'\u201CSomeone who sweats line-height\u201D \u2014 I laughed, because I once spent two days on the measure of a writing editor until the text simply disappeared and the writing stayed.\n\nGood reading typography is invisible by design, and I love that it\u2019s the whole product here. Twenty hours a week of careful, quiet craft sounds genuinely lovely. I\u2019ll bring an example of interface typography I\u2019m proud of.',
+        emailTo:'jobs@quill.ink',subject:'Part-time Frontend Engineer \u2014 Jordan Rivers',attachment:'resume_sample_quill.pdf',failTest:false},
+      {id:'northwind',title:'Senior Software Engineer, Web',company:'Northwind',monogram:'N',about:'A mid-size Denver logistics company modernizing decades of internal tooling.',location:'Denver · Hybrid',type:'Full-time',pay:'$140\u2013165k',payListed:true,belowMin:false,hoursType:'40 hrs/wk · Full-time',seniority:'Senior',seniorityLow:false,posted:'Jun 16',postedAgo:'10d ago',postedFacts:'Jun 16 · 10d ago',daysOld:10,applyVia:'Portal',mayBeClosed:false,score:69,tier:'Stretch',
+        why:'Good pay and a serious team, but it leans backend-heavy \u2014 a stretch that would have you growing into the role more than coasting.',
+        gaps:['Backend-heavy','No Go','On-call rotation'],factLine:{location:1,pay:2,hours:2,seniority:0,posted:0,apply:3},
+        posting:['Northwind is a logistics company in Denver, hybrid three days a week.','We need a Senior Software Engineer comfortable across the stack \u2014 this role leans backend, with Go services and an on-call rotation.','Frontend experience is welcome but you\u2019ll spend real time in the services layer.','Pay $140\u2013165k. Apply through the Northwind careers portal.'],
+        diffSummary:'4 lines tailored for this role',
+        diff:[{id:'n1',type:'context',text:'Jordan Rivers \u2014 frontend engineer comfortable reaching into the stack.'},{id:'n2',type:'add',text:'Owned the API contract and BFF layer for a checkout rebuild, not just the UI.',mapsTo:'your 2021 Northbeam work'},{id:'n3',type:'remove',text:'Primarily focused on client-side development.',mapsTo:'your 2021 summary'},{id:'n4',type:'context',text:'Willing to grow into heavier backend ownership.'}],
+        letterDate:'June 26, 2026',salutation:'Dear Northwind,',
+        cover:'I\u2019ll be straight with you: I\u2019m a frontend engineer by gravity, and this role leans the other way. But the checkout rebuild I\u2019m proudest of had me owning the API contract and the layer behind it, not just the screen.\n\nIf you\u2019re open to someone who\u2019d grow into the services side rather than arrive fluent in Go, I\u2019d bring real frontend depth and a genuine appetite to learn the rest. Worth a conversation, I think.',
+        emailTo:'',subject:'',attachment:'resume_sample_northwind.pdf',failTest:false},
+    ];
+  }
+}
+</script>
+</body>
+</html>

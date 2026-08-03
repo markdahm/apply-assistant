@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>The Desk</title>
+<style>
+  :root { --paper:#f7f3ec; --ink:#1e1b16; --muted:#8a8377; --rule:#e3dccf; --accent:#2f5d50; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--paper); color:var(--ink); min-height:100vh; display:flex;
+         align-items:center; justify-content:center;
+         font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+  .card { width:min(360px, 90vw); text-align:center; }
+  h1 { font-family:Georgia,'Times New Roman',serif; font-weight:700; font-size:34px; letter-spacing:.01em; }
+  .sub { color:var(--muted); font-size:13px; text-transform:uppercase; letter-spacing:.14em; margin:10px 0 34px; }
+  form { display:flex; flex-direction:column; gap:12px; }
+  input { font-size:17px; padding:13px 14px; border:1px solid var(--rule); border-radius:8px;
+          background:#fffdf8; color:var(--ink); text-align:center; outline:none; }
+  input:focus { border-color:var(--accent); }
+  button { font-size:16px; font-weight:600; padding:13px; border:0; border-radius:8px;
+           background:var(--ink); color:var(--paper); cursor:pointer; }
+  .bad { color:#a04333; font-size:14px; margin-top:14px; display:none; }
+  .rule { width:56px; height:1px; background:var(--ink); margin:18px auto 0; opacity:.35; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>The Desk</h1>
+    <div class="rule"></div>
+    <div class="sub">Jordan's job queue</div>
+    <form method="POST" action="/api/login">
+      <input type="password" name="password" placeholder="Password" autofocus
+             autocomplete="current-password" required>
+      <button type="submit">Enter</button>
+    </form>
+    <div class="bad" id="bad">That's not it — try again.</div>
+  </div>
+  <script>
+    if (new URLSearchParams(location.search).get('bad')) {
+      document.getElementById('bad').style.display = 'block';
+    }
+  </script>
+</body>
+</html>

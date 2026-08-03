@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>The Desk</title>
+<script src="./desk-data.js"></script>
+<style>
+  :root {
+    --paper:#f7f3ec; --card:#fffdf8; --ink:#1e1b16; --muted:#8a8377;
+    --rule:#e3dccf; --accent:#2f5d50; --gold:#9a7b2d; --bad:#a04333;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  html { -webkit-text-size-adjust:100%; }
+  body { background:var(--paper); color:var(--ink);
+         font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+         padding-bottom:env(safe-area-inset-bottom); }
+  .serif { font-family:Georgia,'Times New Roman',serif; }
+
+  header { padding:22px 18px 12px; text-align:center; }
+  header h1 { font-family:Georgia,serif; font-size:26px; }
+  header .sub { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.16em; margin-top:4px; }
+
+  .tabs { display:flex; gap:6px; padding:10px 14px; position:sticky; top:0; overflow-x:auto; -webkit-overflow-scrolling:touch;
+          background:linear-gradient(var(--paper) 85%, transparent); z-index:5; }
+  .tab { flex:1 0 auto; min-width:72px; text-align:center; font-size:13px; font-weight:600; padding:9px 0;
+         border:1px solid var(--rule); border-radius:999px; background:var(--card);
+         color:var(--muted); cursor:pointer; user-select:none; }
+  .tab.on { background:var(--ink); color:var(--paper); border-color:var(--ink); }
+  .tab .n { font-weight:400; opacity:.75; }
+
+  .list { padding:6px 14px 40px; display:flex; flex-direction:column; gap:10px; }
+  .job { background:var(--card); border:1px solid var(--rule); border-radius:12px;
+         padding:14px 14px 12px; cursor:pointer; }
+  .job .top { display:flex; align-items:flex-start; gap:12px; }
+  .seal { flex:0 0 44px; width:44px; height:44px; border-radius:50%; border:1.5px solid var(--ink);
+          display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .seal b { font-family:Georgia,serif; font-size:16px; line-height:1; }
+  .seal i { font-style:normal; font-size:8px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+  .seal.strong { border-color:var(--accent); color:var(--accent); }
+  .seal.stretch { border-color:var(--gold); color:var(--gold); }
+  .job h3 { font-family:Georgia,serif; font-size:17px; line-height:1.3; }
+  .job .co { color:var(--muted); font-size:13.5px; margin-top:2px; }
+  .job .meta { color:var(--muted); font-size:12.5px; margin-top:8px; display:flex; flex-wrap:wrap; gap:6px 12px; }
+  .job .why { font-size:13.5px; margin-top:8px; color:#4a443b; border-left:2px solid var(--rule); padding-left:9px; }
+  .badge { display:inline-block; font-size:10.5px; font-weight:700; letter-spacing:.06em;
+           text-transform:uppercase; padding:2px 8px; border-radius:999px; }
+  .badge.st { background:#e7efe9; color:var(--accent); }
+  .badge.sr { background:#f3ead3; color:var(--gold); }
+  .badge.status { background:#eee7da; color:var(--muted); }
+  .empty { text-align:center; color:var(--muted); padding:60px 30px; font-size:14.5px; }
+
+  /* detail overlay */
+  .detail { position:fixed; inset:0; background:var(--paper); z-index:20; overflow-y:auto;
+            -webkit-overflow-scrolling:touch; display:none; }
+  .detail.open { display:block; }
+  .dbar { position:sticky; top:0; display:flex; align-items:center; gap:10px; padding:12px 14px;
+          background:linear-gradient(var(--paper) 80%, transparent); z-index:2; }
+  .back { border:1px solid var(--rule); background:var(--card); border-radius:999px;
+          font-size:14px; font-weight:600; padding:7px 15px; cursor:pointer; color:var(--ink); }
+  .dwrap { padding:2px 18px 130px; max-width:640px; margin:0 auto; }
+  .dwrap h2 { font-family:Georgia,serif; font-size:23px; line-height:1.25; margin-top:6px; }
+  .dwrap .co { color:var(--muted); margin-top:3px; font-size:15px; }
+  .facts { display:grid; grid-template-columns:1fr 1fr; gap:8px 14px; margin:16px 0;
+           background:var(--card); border:1px solid var(--rule); border-radius:12px; padding:13px 14px; }
+  .facts div { font-size:13.5px; }
+  .facts b { display:block; font-size:10.5px; text-transform:uppercase; letter-spacing:.1em;
+             color:var(--muted); font-weight:700; margin-bottom:1px; }
+  .sec { margin-top:20px; }
+  .sec h4 { font-size:11px; text-transform:uppercase; letter-spacing:.14em; color:var(--muted); margin-bottom:8px; }
+  .sec p { font-size:14.5px; margin-bottom:10px; color:#37322a; }
+  .gap { font-size:13.5px; color:#4a443b; padding:6px 0 6px 10px; border-left:2px solid var(--gold); margin-bottom:6px; }
+  .actions { position:fixed; left:0; right:0; bottom:0; padding:10px 14px calc(12px + env(safe-area-inset-bottom));
+             background:linear-gradient(transparent, var(--paper) 30%); display:flex; gap:8px; z-index:3; }
+  .btn { flex:1; text-align:center; font-size:14.5px; font-weight:650; padding:13px 6px;
+         border-radius:10px; border:1px solid var(--rule); background:var(--card);
+         color:var(--ink); cursor:pointer; text-decoration:none; }
+  .btn.primary { background:var(--ink); color:var(--paper); border-color:var(--ink); }
+  .btn.approve { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .btn.pass { color:var(--bad); }
+  .linkrow { display:flex; gap:8px; margin:16px 0 4px; flex-wrap:wrap; }
+  .linkrow .btn { flex:1 1 45%; }
+  .note { font-size:12.5px; color:var(--muted); margin-top:10px; }
+  .toast { position:fixed; bottom:90px; left:50%; transform:translateX(-50%); background:var(--ink);
+           color:var(--paper); font-size:14px; padding:9px 18px; border-radius:999px; opacity:0;
+           transition:opacity .25s; pointer-events:none; z-index:40; }
+  .toast.show { opacity:1; }
+</style>
+</head>
+<body>
+<header>
+  <h1>The Desk</h1>
+  <div class="sub">Jordan's job queue · mobile</div>
+</header>
+
+<div class="tabs" id="tabs"></div>
+<div class="list" id="list"></div>
+
+<div class="detail" id="detail">
+  <div class="dbar">
+    <button class="back" onclick="closeDetail()">← Queue</button>
+    <span id="dstatus"></span>
+  </div>
+  <div class="dwrap" id="dwrap"></div>
+  <div class="actions" id="dactions"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+  var DATA = (window.__DESK_DATA || []).slice();
+  var LS_KEY = 'desk-status-v2';
+  var statuses = {};  // { id: { status, decidedAt } }
+  try {
+    statuses = JSON.parse(localStorage.getItem(LS_KEY) || 'null')
+      || JSON.parse(localStorage.getItem('desk-status-v1') || '{}');
+  } catch (e) {}
+  // migrate v1 string values to v2 objects
+  Object.keys(statuses).forEach(function (k) {
+    if (typeof statuses[k] === 'string') statuses[k] = { status: statuses[k] };
+  });
+
+  var TABS = [
+    { id: 'queue',          label: 'Queue' },
+    { id: 'Interested',     label: 'Interested' },
+    { id: 'Applied',        label: 'Applied' },
+    { id: 'Interviewing',   label: 'Interview' },
+    { id: 'Ignored',        label: 'Ignored' },
+    { id: 'Not interested', label: 'Not for me' }
+  ];
+  // migrate old status values (approved/saved/passed) to the shared model
+  var MIGRATE = { approved: 'Applied', saved: 'Interested', passed: 'Ignored', 'Heard back': 'Interviewing' };
+  Object.keys(statuses).forEach(function (k) {
+    var st = statuses[k] && statuses[k].status;
+    if (MIGRATE[st]) statuses[k].status = MIGRATE[st];
+  });
+  // remote statuses win over local cache
+  try {
+    fetch('api/status', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (map) {
+        if (!map) return;
+        Object.keys(map).forEach(function (k) { statuses[k] = map[k]; });
+        save(); render();
+      }).catch(function () {});
+  } catch (e) {}
+  var tab = 'queue';
+  var current = null;
+
+  function save() {
+    localStorage.setItem(LS_KEY, JSON.stringify(statuses));
+    try {
+      fetch('api/status', { method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(statuses) }).catch(function () {});
+    } catch (e) {}
+  }
+  function statusOf(j) { return (statuses[j.id] && statuses[j.id].status) || 'queue'; }
+  function inTab(j) { if (tab === 'queue' && j.shortlisted === false) return false; return statusOf(j) === tab; }
+
+  function counts() {
+    var c = {};
+    TABS.forEach(function (t) { c[t.id] = 0; });
+    DATA.forEach(function (j) { c[statusOf(j)] = (c[statusOf(j)] || 0) + 1; });
+    return c;
+  }
+
+  function renderTabs() {
+    var c = counts();
+    document.getElementById('tabs').innerHTML = TABS.map(function (t) {
+      return '<div class="tab ' + (tab === t.id ? 'on' : '') + '" onclick="setTab(\'' + t.id + '\')">'
+        + t.label + ' <span class="n">' + (c[t.id] || 0) + '</span></div>';
+    }).join('');
+  }
+  function setTab(t) { tab = t; render(); }
+
+  function sealClass(j) { return j.tier === 'Strong' ? 'strong' : 'stretch'; }
+
+  function renderList() {
+    var jobs = DATA.filter(inTab);
+    var el = document.getElementById('list');
+    if (!jobs.length) {
+      var msg = tab === 'queue'
+        ? 'Queue is clear. New matches land here after each sweep.'
+        : 'Nothing ' + tab + ' yet.';
+      el.innerHTML = '<div class="empty">' + msg + '</div>';
+      return;
+    }
+    el.innerHTML = jobs.map(function (j, i) {
+      return '<div class="job" onclick="openDetail(\'' + j.id + '\')">'
+        + '<div class="top">'
+        + '<div class="seal ' + sealClass(j) + '"><b>' + j.score + '</b><i>' + j.tier + '</i></div>'
+        + '<div style="flex:1;min-width:0">'
+        + '<h3>' + (j.manual ? '<span style="color:#9a7b2d;font-size:11px;" title="Added by you">\u25c6</span> ' : '') + esc(j.title) + '</h3>'
+        + '<div class="co">' + esc(j.company) + ' · ' + esc(j.location) + '</div>'
+        + '</div></div>'
+        + '<div class="meta">'
+        + (j.pay ? '<span>' + esc(j.pay) + '</span>' : '')
+        + '<span>' + esc(j.type) + '</span>'
+        + (j.postedAgo ? '<span>' + esc(j.postedAgo) + '</span>' : '')
+        + '<span class="badge ' + (j.tier === 'Strong' ? 'st' : 'sr') + '">' + j.tier + '</span>'
+        + '</div>'
+        + (j.why ? '<div class="why">' + esc(j.why) + '</div>' : '')
+        + '</div>';
+    }).join('');
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function pdfName(j) {
+    var t = (j.title || 'Resume').replace(/[\\/:*?"<>|]+/g, '-').replace(/\s{2,}/g, ' ').trim();
+    return t + ' — Jordan Rivers.pdf';
+  }
+
+  function copyLetter() {
+    if (!current) return;
+    var text = (current.salutation ? current.salutation + '\n\n' : '')
+      + (current.cover || '') + '\n\n'
+      + (current.signoff1 || 'Warmly,') + '\n' + (current.signoff2 || 'Jordan');
+    function done() { toast('Copied ✓'); }
+    function fallback() {
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); done();
+      } catch (e) { toast('Copy failed'); }
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(fallback);
+    } else { fallback(); }
+  }
+
+  function gmailLink(j) {
+    var body = 'Hello,\n\nPlease find my application for the ' + j.title + ' position attached.\n\n'
+      + '(Draft — write the real note before sending.)\n\nJordan Rivers\n(555) 010-0100';
+    return 'https://mail.google.com/mail/?view=cm&fs=1'
+      + '&to=' + encodeURIComponent(j.emailTo)
+      + '&su=' + encodeURIComponent(j.subject)
+      + '&body=' + encodeURIComponent(body);
+  }
+
+  function openDetail(id) {
+    var j = DATA.find(function (x) { return x.id === id; });
+    if (!j) return;
+    current = j;
+    var st = statusOf(j);
+    document.getElementById('dstatus').innerHTML =
+      st !== 'queue' ? '<span class="badge status">' + st + '</span>' : '';
+
+    var h = '';
+    h += '<h2>' + (j.manual ? '<span style="color:#9a7b2d;font-size:14px;" title="Added by you">◆</span> ' : '') + esc(j.title) + '</h2>';
+    h += '<div class="co">' + esc(j.company) + ' · ' + esc(j.location) + '</div>';
+    h += '<div class="facts">'
+      + '<div><b>Fit</b>' + j.score + ' · ' + j.tier + '</div>'
+      + '<div><b>Pay</b>' + esc(j.pay || 'Not listed') + '</div>'
+      + '<div><b>Type</b>' + esc(j.type) + '</div>'
+      + '<div><b>Posted</b>' + esc(j.postedFacts || '—') + '</div>'
+      + '<div><b>Apply via</b>' + esc(j.applyVia) + '</div>'
+      + '<div><b>Level</b>' + esc(j.seniority) + '</div>'
+      + '</div>';
+
+    if (j.why) h += '<div class="sec"><h4>Why this fits you</h4><p>' + esc(j.why) + '</p></div>';
+    if (j.benefits) h += '<div class="sec"><h4>Benefits</h4><p>' + esc(j.benefits) + '</p></div>';
+    if (j.gaps && j.gaps.length) {
+      h += '<div class="sec"><h4>Gaps to address</h4>'
+        + j.gaps.map(function (g) { return '<div class="gap">' + esc(g) + '</div>'; }).join('') + '</div>';
+    }
+
+    h += '<div class="linkrow">';
+    if (j.url) h += '<a class="btn primary" target="_blank" rel="noopener" href="' + esc(j.url) + '">Open posting ↗</a>';
+    h += '<a class="btn" href="' + esc(j.pdfFile || 'resume.pdf') + '" download="' + esc(pdfName(j)) + '">Resume PDF ↓</a>';
+    h += '<div class="btn" onclick="copyLetter()">Copy letter</div>';
+    if (j.emailTo) {
+      h += '<a class="btn" target="_blank" rel="noopener" href="' + esc(gmailLink(j)) + '">Email via Gmail</a>';
+      h += '<a class="btn" href="mailto:' + esc(j.emailTo) + '?subject=' + encodeURIComponent(j.subject) + '">Mail app</a>';
+    }
+    h += '</div>';
+    if (j.emailTo) h += '<div class="note">Email applications open pre-addressed — nothing sends until you hit send.</div>';
+
+    if (j.posting && j.posting.length) {
+      h += '<div class="sec"><h4>The posting</h4>'
+        + j.posting.map(function (b) {
+            var blk = (typeof b === 'string') ? { kind: 'p', text: b } : (b || {});
+            if (blk.kind === 'h') return '<p style="font-weight:700;font-size:12.5px;text-transform:uppercase;letter-spacing:.06em;margin:14px 0 4px;color:var(--ink)">' + esc(blk.text) + '</p>';
+            if (blk.kind === 'li') return '<p style="margin:0 0 5px;padding-left:14px;text-indent:-11px"><span style="color:#b4472e">•</span> ' + esc(blk.text) + '</p>';
+            return '<p>' + esc(blk.text) + '</p>';
+          }).join('') + '</div>';
+    }
+    h += '<div class="sec"><h4>Cover letter</h4><p style="color:var(--muted)">' + esc(j.cover) + '</p></div>';
+
+    document.getElementById('dwrap').innerHTML = h;
+    renderDetailActions(j);
+    document.getElementById('detail').classList.add('open');
+    document.getElementById('detail').scrollTop = 0;
+  }
+
+  function renderDetailActions(j) {
+    var st = statusOf(j);
+    var order = ['Interested', 'Applied', 'Interviewing', 'Ignored', 'Not interested'];
+    var a = order.map(function (o) {
+      var on = st === o;
+      var cls = 'btn' + (on ? ((o === 'Ignored' || o === 'Not interested') ? ' pass' : ' approve') : '');
+      var label = o === 'Not interested' ? 'Not for me' : (o === 'Interviewing' ? 'Interview' : o);
+      return '<div class="' + cls + '" style="min-width:0;font-size:12.5px;padding:11px 2px;" onclick="mark(\'' + o + '\')">' + label + '</div>';
+    }).join('');
+    document.getElementById('dactions').innerHTML = a;
+  }
+
+  function mark(st) {
+    if (!current) return;
+    var curSt = statuses[current.id] && statuses[current.id].status;
+    if (curSt === st) { delete statuses[current.id]; st = 'queue'; }
+    else if (st === 'queue') delete statuses[current.id];
+    else statuses[current.id] = { status: st, decidedAt: (st === 'Applied' && curSt === 'Applied' && statuses[current.id].decidedAt) || Date.now() };
+    save();
+    toast(st === 'queue' ? 'Back in the queue' : st + ' ✓');
+    renderDetailActions(current);
+    render();
+  }
+
+  function closeDetail() {
+    document.getElementById('detail').classList.remove('open');
+    current = null;
+    render();
+  }
+
+  var toastTimer = null;
+  function toast(msg) {
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.classList.remove('show'); }, 1600);
+  }
+
+  function render() { renderTabs(); renderList(); }
+
+  if (!DATA.length) {
+    document.getElementById('list').innerHTML =
+      '<div class="empty">No jobs exported yet — run a sweep + match, then <code>cli export</code>.</div>';
+    renderTabs();
+  } else {
+    DATA.sort(function (a, b) { return b.score - a.score; });
+    render();
+  }
+</script>
+</body>
+</html>

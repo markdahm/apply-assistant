@@ -1,0 +1,39 @@
+{
+  "_note": "PLACEHOLDER candidate profile so the matcher runs before Jordan's real preferences.md lands. Replace by saving a real config/profile.json (gitignored). Modeled here as a mid-level software engineer purely to exercise the pipeline.",
+  "candidate": {
+    "name": "Jordan (placeholder)",
+    "summary": "Mid-level full-stack software engineer, ~4 years, Python/TypeScript/React, comfortable across backend APIs and frontend.",
+    "titles": ["Software Engineer", "Full-Stack Engineer", "Backend Engineer"],
+    "skills": [
+      "Python", "TypeScript", "JavaScript", "React", "Node.js",
+      "PostgreSQL", "REST APIs", "AWS", "Docker", "Git"
+    ],
+    "years_experience": 4,
+    "seniority": "mid",
+    "work_authorization": "US citizen (no sponsorship needed)"
+  },
+  "preferences": {
+    "target_role_keywords": [
+      "software engineer", "full stack", "full-stack", "fullstack",
+      "backend", "back end", "frontend", "front end", "developer", "engineer"
+    ],
+    "exclude_role_keywords": [
+      "sales", "account executive", "recruiter", "marketing", "designer",
+      "product manager", "data scientist", "support", "customer success",
+      "solutions engineer", "intern", "accountant", "finance", "counsel",
+      "people partner", "talent", "administrative"
+    ],
+    "seniority_floor": "mid",
+    "seniority_ceiling": "senior",
+    "locations": [
+      "remote", "united states", "usa", "us", "u.s.", "new york", "nyc",
+      "brooklyn", "austin", "san francisco", "los angeles"
+    ],
+    "remote_ok": true,
+    "comp_floor": 110000,
+    "exclude_keywords": [
+      "security clearance", "active clearance", "ts/sci", "polygraph", "secret clearance"
+    ],
+    "needs_sponsorship": false
+  }
+}
