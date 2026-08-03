@@ -74,9 +74,19 @@ pip install -e .            # or: pip install -r requirements.txt
 cp .env.example .env        # fill in the keys you have (all optional)
 ```
 
-Point the matcher at a candidate by creating `config/profile.json` (start from
-`config/profile.example.json`) and, for tailoring/letters, the files in
-[`profile/`](profile/README.md). Then:
+Set up the candidate the easy way — a browser form:
+
+```bash
+apply onboard                     # opens a local web app; fill it in, hit Finish
+```
+
+`onboard` launches a small self-contained web app (Python's built-in server, no
+extra deps) that walks the person through four steps and writes
+`config/profile.json`, `config/sources.json`, and the `profile/*.md` files for
+them — location defaults are pre-set for a South Bay job search. It never
+clobbers existing files (it backs them up to `*.bak` first). Prefer to do it by
+hand? Create `config/profile.json` from `config/profile.example.json` and the
+files in [`profile/`](profile/README.md) yourself. Then:
 
 ```bash
 apply sweep                       # pull every source into the DB

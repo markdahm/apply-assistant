@@ -172,6 +172,11 @@ def cmd_tailor(args):
         print("Run `export` to render the tailored previews + per-job PDFs.")
 
 
+def cmd_onboard(args):
+    from .onboard import run_onboard
+    run_onboard(port=args.port, open_browser=not args.no_open)
+
+
 def cmd_show(args):
     conn = dbm.connect(args.db)
     r = dbm.get_job(conn, args.uid)
@@ -191,6 +196,11 @@ def main(argv=None):
     p = argparse.ArgumentParser(prog="apply-assistant", description="Job sourcing engine")
     p.add_argument("--db", default=str(DEFAULT_DB), help="SQLite DB path")
     sub = p.add_subparsers(dest="cmd", required=True)
+
+    s = sub.add_parser("onboard", help="launch the web onboarding app to set up a candidate")
+    s.add_argument("--port", type=int, default=8765, help="port for the local onboarding app")
+    s.add_argument("--no-open", action="store_true", help="don't auto-open the browser")
+    s.set_defaults(func=cmd_onboard)
 
     s = sub.add_parser("sweep", help="pull all sources into the DB")
     s.add_argument("--config", default=None, help="path to sources.json")
