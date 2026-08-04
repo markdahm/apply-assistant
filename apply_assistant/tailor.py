@@ -184,8 +184,13 @@ def validate(doc, base):
     bad = [s for s in skills if _norm(s) not in base_skills_norm]
     if bad:
         errors.append("skills not in base list: {0}".format(bad[:4]))
-    if len(skills) < 8:
-        errors.append("fewer than 8 skills")
+    # The floor is relative to the base resume: demanding 8 from a candidate
+    # whose resume lists 5 asks the model to invent three, which is the one
+    # thing this validator exists to prevent.
+    floor = min(8, len(base["skills"]))
+    if len(skills) < floor:
+        errors.append("fewer than {0} skills (base lists {1})".format(
+            floor, len(base["skills"])))
 
     if errors:
         return False, errors, None
@@ -206,7 +211,12 @@ def base_for_tailoring():
             education = " ".join(sec["lines"])
         elif "skill" in t:
             for line in sec["lines"]:
-                skills += [s.strip() for s in line.split("•") if s.strip()]
+                # The hand-written template separates skills with "•"; the
+                # onboarding form writes them comma-separated. Accept both, or
+                # the whole line parses as a single giant "skill" and every
+                # tailoring attempt fails validation against it.
+                parts = line.split("•") if "•" in line else line.split(",")
+                skills += [s.strip() for s in parts if s.strip()]
         for j in sec["jobs"]:
             roles.append({
                 "role": j["role"], "org": j["org"], "dates": j["dates"],

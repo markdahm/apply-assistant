@@ -809,7 +809,7 @@ class Component extends DCLogic {
       v.copyLabel=s.copiedCover?'Copied ✓':'Copy letter ⧉';
       v.copyBg=s.copiedCover?'#2F4A3C':'#F4EFE4'; v.copyColor=s.copiedCover?'#F4EFE4':'#221E1A';
       v.signoff1=j.signoff1||'Warmly,'; v.signoff2=j.signoff2||this.candName();
-      v.onViewBase=()=>this.trace('Your base resume','Measured against the resume you uploaded Mar 3 — the master copy nothing changes against without showing you.','base_resume.pdf');
+      v.onViewBase=()=>this.trace('Your base resume','Measured against your base resume — the master copy nothing changes against without showing you.','base_resume.pdf');
 
       const facts=[
         {key:'location',label:'Location',value:j.location},
@@ -845,7 +845,7 @@ class Component extends DCLogic {
       v.needsLetter=(!j.letterReal)||!!lst;
       v.letterCta=lst==='working'?'Writing…':lst==='slow'?'Still writing — worker running?':lst==='failed'?'Failed — retry ✍':'Write this one ✍';
       v.onGenerateLetter=()=>this.generateLetter();
-      v.onTraceCover=()=>this.trace('Traceable, line by line','Each paragraph maps to a real resume bullet — the Atlas migration, the 40% checkout win, the mentoring. Tap any resume line to follow the thread.','nothing here is invented');
+      v.onTraceCover=()=>this.trace('Traceable, line by line','Every claim is checked against your resume and experience bank before the letter is saved. Numbers that do not appear in them are rejected, and a letter that fails the check is replaced by a placeholder rather than shipped.','nothing here is invented');
 
       // resume
       v.changesBg=s.showChanges?'#221E1A':'#F4EFE4'; v.changesColor=s.showChanges?'#F4EFE4':'#6B6258';

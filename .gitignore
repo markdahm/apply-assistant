@@ -10,6 +10,10 @@ config/profile.json
 profile/*.md
 profile/raw/
 profile/samples/
+# Every backup the engine writes holds the same data as the file it replaced:
+# onboarding's *.bak archives, and the normalizer's resume.md.raw.bak. The
+# rules above are extension-anchored and miss all of them.
+*.bak
 !profile/README.md
 !profile/*.example.md
 

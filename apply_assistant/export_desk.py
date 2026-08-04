@@ -242,18 +242,18 @@ def build_desk_data(db_path=None, comp_floor=None, limit=200):
             changed = sum(1 for role in tailored["roles"] for b in role["bullets"] if b["changed"]) + 1
             diff_summary = "{0} lines tailored to this posting — highlighted below".format(changed)
             resume_note = ("Highlighted lines were re-worded for this job. Every line still traces "
-                           "to his base resume — nothing invented. The PDF downloads clean, without highlights.")
+                           "to your base resume — nothing invented. The PDF downloads clean, without highlights.")
             resume_html = tailored_sheet_html(base_resume, tailored, highlight=True)
             clean_html = tailored_sheet_html(base_resume, tailored, highlight=False)
             pdf_file = "resume_" + r["uid"][:10] + ".pdf"
         elif r["match_tier"] in ("strong", "stretch"):
             diff_summary = "His current general resume — run `cli tailor` to tailor it to this job"
-            resume_note = ("This is his general resume, exactly as the PDF renders. "
+            resume_note = ("This is your general resume, exactly as the PDF renders. "
                            "Run the tailor step to adapt it to this posting.")
         else:
             diff_summary = "Below the shortlist bar — no tailoring generated"
             resume_note = ("This job scored below the shortlist bar, so no tailored resume or letter "
-                           "was generated. This is his general resume; set a status if it's worth pursuing anyway.")
+                           "was generated. This is your general resume; set a status if it's worth pursuing anyway.")
         posting_paras = _posting(r)
 
         def _find_para(pred):

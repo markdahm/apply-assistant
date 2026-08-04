@@ -219,6 +219,22 @@ def cmd_onboard(args):
     ob.run_onboard(port=args.port, open_browser=not args.no_open)
 
 
+def cmd_normalize_resume(args):
+    from .normalize_resume import normalize_file
+    print("Restructuring profile/resume.md into the engine's format...\n")
+    rep = normalize_file(verbose=True)
+    if rep.get("ok"):
+        print("\n-- normalize complete --")
+        print("  {0} roles, {1} bullets".format(rep["roles"], rep["bullets"]))
+        print("  wrote  {0}".format(rep["wrote"]))
+        print("  backup {0}".format(rep["backup"]))
+        print("\nNow run: tailor, then export.")
+    else:
+        print("\n-- normalize FAILED — resume.md left untouched --")
+        for e in rep.get("errors", [])[:6]:
+            print("   !! " + e)
+
+
 def cmd_letter_worker(args):
     from .letter_worker import main as worker_main
     worker_main(watch=args.watch, interval=args.interval)
@@ -304,6 +320,10 @@ def main(argv=None):
     s.add_argument("--limit", type=int, default=None, help="cap letters this run")
     s.add_argument("--force", action="store_true", help="regenerate even if cached")
     s.set_defaults(func=cmd_letters)
+
+    s = sub.add_parser("normalize-resume",
+                       help="restructure profile/resume.md into the format tailoring parses")
+    s.set_defaults(func=cmd_normalize_resume)
 
     s = sub.add_parser("letter-worker",
                        help="serve on-demand letter requests from The Desk's button")

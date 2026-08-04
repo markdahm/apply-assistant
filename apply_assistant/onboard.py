@@ -645,7 +645,20 @@ def fetch_and_save(token=None, index=None):
     if not subs:
         raise RuntimeError("no submissions in the queue yet")
     entry = subs[index] if index is not None else subs[-1]
-    return save_all(entry["payload"]), entry
+    report = save_all(entry["payload"])
+
+    # A pasted resume is whatever the candidate had lying around; tailoring
+    # needs roles and bullets as discrete objects. Restructure it now, once,
+    # rather than failing per-job later. Purely structural and validated —
+    # if it can't be done honestly the raw paste stays.
+    try:
+        from .normalize_resume import normalize_file
+
+        norm = normalize_file(verbose=False)
+        report["normalized"] = norm
+    except Exception as e:  # noqa: BLE001 - never block a fetch on this
+        report["normalized"] = {"ok": False, "errors": [str(e)[:120]]}
+    return report, entry
 
 
 class _Handler(BaseHTTPRequestHandler):
