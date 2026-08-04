@@ -151,7 +151,7 @@ def cmd_add(args):
 
 def cmd_letters(args):
     from .letters import LETTER_MODEL, run_letters
-    print("Writing cover letters in Jordan's voice via {0}...\n".format(LETTER_MODEL))
+    print("Writing cover letters in the candidate's voice via {0}...\n".format(LETTER_MODEL))
     rep = run_letters(db_path=args.db, limit=args.limit, force=args.force)
     print("\n-- letters complete --")
     print("  written: {0}   failed: {1}   already cached: {2}".format(
@@ -217,6 +217,11 @@ def cmd_onboard(args):
         return
 
     ob.run_onboard(port=args.port, open_browser=not args.no_open)
+
+
+def cmd_letter_worker(args):
+    from .letter_worker import main as worker_main
+    worker_main(watch=args.watch, interval=args.interval)
 
 
 def cmd_show(args):
@@ -299,6 +304,12 @@ def main(argv=None):
     s.add_argument("--limit", type=int, default=None, help="cap letters this run")
     s.add_argument("--force", action="store_true", help="regenerate even if cached")
     s.set_defaults(func=cmd_letters)
+
+    s = sub.add_parser("letter-worker",
+                       help="serve on-demand letter requests from The Desk's button")
+    s.add_argument("--watch", action="store_true", help="poll continuously instead of one pass")
+    s.add_argument("--interval", type=int, default=20, help="seconds between polls with --watch")
+    s.set_defaults(func=cmd_letter_worker)
 
     s = sub.add_parser("add", help="manually add job URLs: scrape, score, tailor, letter")
     s.add_argument("urls", nargs="+", help="one or more job posting URLs")

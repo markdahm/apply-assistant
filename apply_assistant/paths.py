@@ -29,6 +29,10 @@ DEFAULT_DB = _resolve_db()
 # never share it between hosts. Lives alongside the DB.
 INBOX_LEDGER = DEFAULT_DB.parent / "inbox-processed.json"
 
+# Which on-demand letter requests this host has already served. Same local
+# authority rule as INBOX_LEDGER — never share it between hosts.
+LETTER_LEDGER = DEFAULT_DB.parent / "letter-requests-processed.json"
+
 # Optional: drop pre-scraped Firecrawl board results here as JSON to feed the
 # engine without a live FIRECRAWL_API_KEY.
 FIRECRAWL_INBOX = DATA_DIR / "firecrawl_inbox"

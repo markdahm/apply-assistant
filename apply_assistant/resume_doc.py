@@ -1,4 +1,4 @@
-"""Render Jordan's canonical resume (profile/resume.md) as a document.
+"""Render the candidate's canonical resume (profile/resume.md) as a document.
 
 Two artifacts from one source:
   - a "sheet" HTML fragment that looks like a printed resume page — embedded in
@@ -6,7 +6,7 @@ Two artifacts from one source:
   - a real, text-based PDF (headless Chrome print-to-pdf) shipped next to the
     app; the Download button saves it named after the job title.
 
-The resume is Jordan's real general resume for now — per-job tailoring replaces
+The resume is the candidate's real general resume for now — per-job tailoring replaces
 the source content in Phase 2, and everything downstream stays the same.
 """
 
@@ -20,6 +20,7 @@ import tempfile
 from pathlib import Path
 
 from .paths import PROJECT_ROOT
+from .util import candidate_name
 
 RESUME_MD = PROJECT_ROOT / "profile" / "resume.md"
 PDF_NAME = "resume.pdf"
@@ -135,7 +136,7 @@ def sheet_html(doc=None) -> str:
 def standalone_html(doc=None) -> str:
     """Full page wrapping the sheet — this is what Chrome prints to PDF."""
     return (
-        "<!doctype html><html><head><meta charset=\"utf-8\"><title>Jordan Rivers — Resume</title>"
+        "<!doctype html><html><head><meta charset=\"utf-8\"><title>" + candidate_name() + " — Resume</title>"
         "<style>@page{size:letter;margin:0.45in;} html,body{margin:0;padding:0;background:#fff;}"
         "body>div{border:none !important;box-shadow:none !important;padding:0 !important;}</style>"
         "</head><body>" + sheet_html(doc) + "</body></html>"
@@ -201,7 +202,7 @@ def tailored_sheet_html(base, enriched, highlight=True) -> str:
 
 def wrap_standalone(sheet: str) -> str:
     return (
-        "<!doctype html><html><head><meta charset=\"utf-8\"><title>Jordan Rivers — Resume</title>"
+        "<!doctype html><html><head><meta charset=\"utf-8\"><title>" + candidate_name() + " — Resume</title>"
         "<style>@page{size:letter;margin:0.45in;} html,body{margin:0;padding:0;background:#fff;}"
         "body>div{border:none !important;box-shadow:none !important;padding:0 !important;}</style>"
         "</head><body>" + sheet + "</body></html>"

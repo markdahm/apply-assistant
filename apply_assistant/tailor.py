@@ -1,6 +1,6 @@
 """Per-job resume tailoring (Phase 2, resume half).
 
-For each shortlisted job, Claude re-words and re-orders the bullets of Jordan's
+For each shortlisted job, Claude re-words and re-orders the bullets of the candidate's
 REAL resume to foreground what matters for THAT posting — plus a one-line
 profile. Hard constraints, enforced by a validator, not just the prompt:
 
@@ -41,18 +41,13 @@ TOOL_TOKENS = [
     "neogov", "workday", "peoplesoft", "sap", "oracle", "canva", "slack",
 ]
 
-SYSTEM = (
+SYSTEM_TMPL = (
     "You tailor ONE real resume to ONE real job posting. You may only re-word, "
     "re-order, and re-emphasize what the base resume already establishes — you "
     "NEVER invent experience, skills, tools, employers, titles, dates, or "
     "quantities. The candidate must be able to defend every line in an "
     "interview by pointing at the base resume.\n\n"
-    "Candidate context: a career-changer targeting stable, mission-driven "
-    "administrative/coordination roles (cities, libraries, colleges, museums). "
-    "Foreground the transferable admin spine — records management, scheduling, "
-    "database accuracy, calm front-desk/customer-facing work, event and vendor "
-    "coordination, inventory — using the posting's own vocabulary where it is "
-    "truthful to do so.\n\n"
+    "{context}\n\n"
     "Style: factual, specific, contribution-over-responsibility. No buzzwords "
     "(never: leverage, synergy, dynamic, results-driven, passionate about). No "
     "first person. Bullets stay under ~30 words.\n\n"
@@ -75,6 +70,36 @@ SYSTEM = (
     "Include every base role, in the same order."
 )
 
+
+def _system_prompt():
+    """The tailoring prompt, with candidate context read from the profile.
+
+    This paragraph used to hardcode one template persona ("a career-changer
+    targeting administrative roles"), which silently reframed every candidate
+    as that persona no matter what their resume said.
+    """
+    from .match import load_profile
+
+    try:
+        prof, _ = load_profile()
+    except Exception:  # noqa: BLE001 - tailoring still works without a profile
+        return SYSTEM_TMPL.replace("{context}", "Candidate context: not supplied.")
+    c = prof.get("candidate", {}) or {}
+    bits = []
+    if c.get("titles"):
+        bits.append("targeting " + ", ".join(c["titles"][:4]))
+    if c.get("seniority"):
+        bits.append(str(c["seniority"]) + "-level")
+    if c.get("years_experience"):
+        bits.append("{0} years of experience".format(c["years_experience"]))
+    summary = (c.get("summary") or "").strip()
+    context = "Candidate context: " + ("; ".join(bits) if bits else "see the base resume")
+    if summary:
+        context += ". In their own words: " + summary
+    context += (". Foreground what the base resume already establishes as relevant "
+                "to THIS posting, using the posting's own vocabulary where that is "
+                "truthful.")
+    return SYSTEM_TMPL.replace("{context}", context)
 
 # ---------------------------------------------------------------- cache table
 
@@ -238,7 +263,7 @@ def _generate_one(client, base, row):
             msgs.append({"role": "user", "content": "Your previous attempt failed validation:\n"
                          + "\n".join(feedback[:6]) + "\nFix these and return the corrected JSON only."})
         resp = client.messages.create(
-            model=TAILOR_MODEL, max_tokens=3000, system=SYSTEM, messages=msgs)
+            model=TAILOR_MODEL, max_tokens=3000, system=_system_prompt(), messages=msgs)
         if getattr(resp, "stop_reason", None) == "refusal":
             return None, ["model declined"]
         text = next((b.text for b in resp.content if getattr(b, "type", None) == "text"), "")

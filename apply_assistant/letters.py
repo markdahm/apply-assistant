@@ -1,4 +1,4 @@
-"""Per-job cover letters in Jordan's real voice (Phase 2, letter half).
+"""Per-job cover letters in the candidate's real voice (Phase 2, letter half).
 
 Grounded in his actual sent letters + emails (profile/voice_real.md, built from
 human-written samples). Facts may come ONLY from resume.md + experience_bank.md
@@ -17,10 +17,11 @@ from concurrent.futures import ThreadPoolExecutor
 
 from . import db as dbm
 from .paths import DEFAULT_DB, PROJECT_ROOT
+from .util import candidate_name
 
 LETTER_MODEL = os.environ.get("APPLY_LETTER_MODEL", "claude-opus-5")
 MAX_WORKERS = int(os.environ.get("APPLY_LETTER_WORKERS", "4"))
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v2"
 
 BANNED = [
     "leverage", "synergy", "dynamic professional", "results-driven",
@@ -29,22 +30,12 @@ BANNED = [
     "uniquely positions", "proven track record", "i am a highly organized",
 ]
 
-# Real Jordan letters as style anchors (from profile/samples/cover letter stuff.pdf).
-ANCHOR_HIBU = """I am excited to apply for the Outside Sales Representative position with Hibu. While my professional background spans hospitality, education, operations, and partnership development rather than traditional sales, every role I have held has centered around building relationships, understanding people's needs, and delivering solutions that create positive experiences.
-
-Most recently, I served as a Restaurant Manager in Brooklyn, where I led daily operations in a fast-paced environment while building strong relationships with guests, training staff, resolving customer concerns, and ensuring an exceptional customer experience. Prior to that, I worked in Partnership Development at Azusa Pacific University, maintaining relationships with over 150 corporate partners while coordinating communications, tracking data through Salesforce, and supporting fundraising initiatives. These experiences taught me the importance of listening carefully, communicating effectively, earning trust, and following through on commitments.
-
-Thank you for considering my application. I would welcome the opportunity to discuss how my background, work ethic, and enthusiasm for building relationships can contribute to Hibu's continued success."""
-
-ANCHOR_GENERIC = """Throughout my career, I have been drawn to roles that require strong organization, relationship-building, and a commitment to helping people succeed, whether supporting students, guests, clients, colleagues, or community partners.
-
-Across each of my roles, I have developed a reputation for being dependable, detail-oriented, and service-minded. I enjoy bringing structure to complex processes, maintaining organized systems, and helping teams operate efficiently.
-
-Thank you for your time and consideration. I would welcome the opportunity to discuss how my background, skills, and experiences can contribute to your team. I look forward to hearing from you."""
-
-
 def _load_facts():
-    """The only permitted fact sources: resume.md + experience_bank.md."""
+    """The only permitted fact sources: resume.md + experience_bank.md.
+
+    Deliberately NOT voice_real.md — writing samples shape register, never
+    facts. A sentence in an old email is not a claim the letter may repeat.
+    """
     resume_raw = (PROJECT_ROOT / "profile" / "resume.md").read_text()
     try:
         bank = (PROJECT_ROOT / "profile" / "experience_bank.md").read_text()
@@ -54,34 +45,56 @@ def _load_facts():
 
 
 SYSTEM_TMPL = (
-    "You write cover letters AS Jordan Rivers, in his real voice, for one "
-    "specific job. You may only state facts found in his FACTS sources below — "
-    "never invent experience, employers, dates, tools, or quantities. He must "
-    "be able to defend every sentence in an interview.\n\n"
-    "HIS VOICE (from his real letters and emails):\n"
-    "- Warm, sincere, explains rather than sells. Career-change honesty is a "
-    "feature: he names what he hasn't done, then shows why the transfer is real.\n"
-    "- Concrete humble specifics over adjectives. One personal line max "
-    "(e.g. having moved back to the Pasadena area), used only when natural.\n"
-    "- Genuine enthusiasm for mission-driven, people-first places (libraries, "
-    "cities, museums, schools). Gratitude in the close, always.\n"
-    "- Faith language ONLY if the employer is explicitly faith-based; never for "
-    "cities/colleges/museums.\n"
+    "You write cover letters AS {name}, in their real voice, for one specific "
+    "job. You may only state facts found in the FACTS sources below — never "
+    "invent experience, employers, dates, tools, or quantities. They must be "
+    "able to defend every sentence in an interview.\n\n"
+    "VOICE:\n"
+    "- Warm and sincere; explain rather than sell.\n"
+    "- Honesty about gaps is a feature: name what they haven't done, then show "
+    "why the transfer is real. Never paper over a mismatch.\n"
+    "- Concrete specifics over adjectives. At most one personal line, and only "
+    "where it lands naturally.\n"
+    "- Gratitude in the close, always.\n"
+    "- Faith or other personal-conviction language ONLY if the employer is "
+    "explicitly of that character; never by default.\n"
     "- Never: {banned}.\n"
     "- Avoid em-dash-heavy prose, rule-of-three rhetoric, and uniform sentence "
     "lengths. Vary rhythm like a person.\n\n"
-    "STYLE ANCHORS — two real passages Jordan wrote (match this register, do "
-    "not copy sentences from them):\n---\n{anchor1}\n---\n{anchor2}\n---\n\n"
-    "STRUCTURE (his house pattern): (1) excited-to-apply opener naming the exact "
-    "role and employer + one honest line on why it appeals to him; (2) most-"
-    "relevant experience with 1-2 concrete specifics; (3) throughline/career-"
-    "change paragraph connecting his path to this role; (4) why this "
-    "organization; (5) thanks + warm close. 230-330 words total. Do NOT include "
-    "the salutation or sign-off — body paragraphs only.\n\n"
+    "{voice_block}"
+    "STRUCTURE: (1) opener naming the exact role and employer + one honest line "
+    "on why it appeals; (2) most-relevant experience with 1-2 concrete "
+    "specifics; (3) a throughline paragraph connecting their path to this role; "
+    "(4) why this organization; (5) thanks + warm close. 230-330 words total. "
+    "Do NOT include the salutation or sign-off — body paragraphs only.\n\n"
     "Respond with ONLY a JSON object: {{\"letter\": \"<body paragraphs separated "
-    "by \\n\\n>\", \"subject\": \"<email subject: Application for ROLE — Jordan "
-    "Rivers>\"}}"
+    "by \\n\\n>\", \"subject\": \"<email subject: Application for ROLE — "
+    "{name}>\"}}"
 )
+
+# Used only when the candidate has supplied no writing samples of their own.
+# Deliberately an instruction rather than someone else's letters: imitating a
+# stranger's register is worse than imitating none.
+VOICE_FALLBACK = (
+    "STYLE: no writing samples were supplied, so infer register from the FACTS "
+    "sources and keep the prose plain, specific, and unadorned. Do not perform "
+    "a personality the candidate has not evidenced.\n\n"
+)
+
+
+def _voice_block():
+    """The candidate's own samples become the style anchor, when they exist."""
+    from .util import candidate_voice
+
+    voice = candidate_voice()
+    if not voice:
+        return VOICE_FALLBACK
+    return (
+        "STYLE ANCHORS — real passages this person wrote. Match this register "
+        "(rhythm, warmth, how formal they are, how they open and close). Do NOT "
+        "copy sentences from them, and do not treat anything in them as a fact "
+        "about their career:\n---\n" + voice[:6000] + "\n---\n\n"
+    )
 
 
 def _ensure_table(conn):
@@ -185,12 +198,12 @@ def _generate_one(client, system, facts_text, row):
         if ok:
             return {"letter": doc["letter"].strip(),
                     "subject": (doc.get("subject") or "").strip()
-                    or "Application for {0} — Jordan Rivers".format(row["title"])}, []
+                    or "Application for {0} — {1}".format(row["title"], candidate_name())}, []
         feedback = errors
     return None, feedback or ["unknown"]
 
 
-def run_letters(db_path=None, limit=None, force=False, verbose=True):
+def run_letters(db_path=None, limit=None, force=False, verbose=True, uids=None):
     import anthropic
 
     from .util import now_iso
@@ -198,14 +211,23 @@ def run_letters(db_path=None, limit=None, force=False, verbose=True):
     _ensure_table(conn)
     resume_raw, bank = _load_facts()
     facts_text = resume_raw + "\n\n" + bank
+    name = candidate_name()
     system = SYSTEM_TMPL.format(
-        banned=", ".join(BANNED[:8]), anchor1=ANCHOR_HIBU, anchor2=ANCHOR_GENERIC)
+        name=name, banned=", ".join(BANNED[:8]), voice_block=_voice_block())
 
-    rows = conn.execute(
-        "SELECT * FROM jobs WHERE COALESCE(knockout,0)=0 AND match_score IS NOT NULL "
-        "AND (match_tier IN ('strong','stretch') OR COALESCE(manual,0)=1) ORDER BY match_score DESC LIMIT ?",
-        (limit or 500,),
-    ).fetchall()
+    if uids:
+        # On-demand: the reviewer clicked "write this one", so honour it even
+        # for a weak-tier job. An explicit human request outranks the rubric.
+        marks = ",".join("?" * len(uids))
+        rows = conn.execute(
+            "SELECT * FROM jobs WHERE uid IN ({0})".format(marks), tuple(uids)
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM jobs WHERE COALESCE(knockout,0)=0 AND match_score IS NOT NULL "
+            "AND (match_tier IN ('strong','stretch') OR COALESCE(manual,0)=1) ORDER BY match_score DESC LIMIT ?",
+            (limit or 500,),
+        ).fetchall()
     todo = []
     for r in rows:
         h = content_hash(r)

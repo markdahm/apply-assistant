@@ -91,7 +91,7 @@
 <body>
 <header>
   <h1>The Desk</h1>
-  <div class="sub">Jordan's job queue · mobile</div>
+  <div class="sub">Job queue · mobile</div>
 </header>
 
 <div class="tabs" id="tabs"></div>
@@ -211,14 +211,16 @@
 
   function pdfName(j) {
     var t = (j.title || 'Resume').replace(/[\\/:*?"<>|]+/g, '-').replace(/\s{2,}/g, ' ').trim();
-    return t + ' — Jordan Rivers.pdf';
+    return t + ' — ' + candName() + '.pdf';
   }
 
-  function copyLetter() {
+  function candName() { return (current && current.signoff2) || 'Candidate'; }
+
+    function copyLetter() {
     if (!current) return;
     var text = (current.salutation ? current.salutation + '\n\n' : '')
       + (current.cover || '') + '\n\n'
-      + (current.signoff1 || 'Warmly,') + '\n' + (current.signoff2 || 'Jordan');
+      + (current.signoff1 || 'Warmly,') + '\n' + (current.signoff2 || candName());
     function done() { toast('Copied ✓'); }
     function fallback() {
       try {
@@ -234,7 +236,7 @@
 
   function gmailLink(j) {
     var body = 'Hello,\n\nPlease find my application for the ' + j.title + ' position attached.\n\n'
-      + '(Draft — write the real note before sending.)\n\nJordan Rivers\n(555) 010-0100';
+      + '(Draft — write the real note before sending.)\n\n' + candName();
     return 'https://mail.google.com/mail/?view=cm&fs=1'
       + '&to=' + encodeURIComponent(j.emailTo)
       + '&su=' + encodeURIComponent(j.subject)

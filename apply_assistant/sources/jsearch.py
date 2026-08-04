@@ -7,7 +7,7 @@ plus employer sites, and hands back a clean JSON feed. So a JSearch result may
 originate on LinkedIn, Indeed, ZipRecruiter, Glassdoor, or a company ATS — and
 because we still run each apply_url through classify(), the ones that link
 straight to a real ATS get a good lane while the pure-aggregator links land in
-lane D (surface only, Jordan applies natively).
+lane D (surface only, the human applies natively).
 
 Paid API with a free RapidAPI tier (~200 requests/mo). Gated on JSEARCH_API_KEY;
 absent = skipped. One config query = one request, so keep the query list tight

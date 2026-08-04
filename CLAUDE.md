@@ -77,6 +77,22 @@ with the human** — Firecrawl is read-only and never submits an application.
   is the easiest source. `save_all()` still keeps its placeholder fallbacks, since
   the local form and the API can be driven directly.
 
+## On-demand cover letters
+
+The Desk has a **"Write this one ✍"** button on any job without a letter. It
+does not generate anything client-side: `site/api/letter` queues one blob under
+`letter-requests/`, and `apply letter-worker` on this machine runs the real
+`letters.py` — honesty validators intact — then exports and publishes. The app
+polls `api/jobs` until `letterReal` flips, ~20–40s.
+
+- Run the worker while reviewing: `apply letter-worker --watch` (polls every 20s).
+  Nothing happens without it; after ~2 minutes the button says so.
+- Deliberately **not** a Vercel function calling Anthropic: that would fork the
+  validators into JavaScript and put the candidate's resume, voice file, and an
+  Anthropic key on Vercel. Today none of those leave this machine.
+- An explicit click generates a letter for **any** job, including weak-tier —
+  a human asking outranks the rubric.
+
 ## Known issues / traps
 
 - **The local form writes straight into `config/` and `profile/`.** Testing
@@ -92,6 +108,21 @@ with the human** — Firecrawl is read-only and never submits an application.
 - **A submission holds real personal data** (resume, contact, comp floor)
   in Mark's Vercel Blob. Unguessable URL, password-gated page — but it is his
   data on Mark's infrastructure, and he should know that.
+- **The template persona is gone — keep it that way.** `letters.py`,
+  `export_desk.py`, `resume_doc.py`, and `tailor.py` all hardcoded a fictional
+  candidate ("Jordan Rivers"): the letter signature, the resume title, the voice
+  anchors, and a tailoring instruction claiming the candidate wanted
+  administrative work. Identity now comes from `config/profile.json` via
+  `util.candidate_name()`, and voice from `profile/voice_real.md` via
+  `util.candidate_voice()`. If a new prompt needs the candidate's name or
+  register, read it from the profile — never inline it.
+- **`voice_real.md` was dead for the whole project's life** — written by
+  onboarding, described in docstrings, loaded by nothing. It now feeds the
+  cover-letter style anchors, with a fallback instruction (not someone else's
+  letters) when it's empty. Facts still come only from `resume.md` +
+  `experience_bank.md`; writing samples shape register, never claims.
+- **`profile.json.candidate.name` is what gets signed.** Mark's test submission
+  said "Mark", so letters signed "Mark". Use a full name.
 - **Single-writer SQLite.** One host owns `jobs.db`. Never put it on a sync
   drive; two writers through a sync layer corrupt it silently.
 

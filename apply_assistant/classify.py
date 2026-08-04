@@ -4,10 +4,10 @@ from typing import Optional, Tuple
 from urllib.parse import urlparse
 
 # Lanes (how the application actually gets submitted):
-#   A = email        -> auto-send after Jordan approves (his own mailbox, zero ToS risk)
+#   A = email        -> auto-send after the human approves (their own mailbox, zero ToS risk)
 #   B = clean ATS     -> pre-fill + 1-click handoff (Greenhouse/Lever/Ashby/Workable/SR/...)
-#   C = hard portal   -> best-effort pre-fill, Jordan finishes (Workday/iCIMS/Taleo/...)
-#   D = do-not-automate -> surface only; Jordan applies natively (LinkedIn/Indeed/...)
+#   C = hard portal   -> best-effort pre-fill, the human finishes (Workday/iCIMS/Taleo/...)
+#   D = do-not-automate -> surface only; the human applies natively (LinkedIn/Indeed/...)
 #   ? = unknown / manual
 
 # (needle in host+url, platform, lane) — most specific first.

@@ -1,7 +1,7 @@
 """Inbox worker — polls the Desk's manual-link queue and processes new links.
 
 Runs on your-server every 10 minutes (com.example.job-desk-inbox).
-Jordan pastes links into the Desk's Add box -> api/inbox queues them in Blob ->
+The reviewer pastes links into the Desk's Add box -> api/inbox queues them in Blob ->
 this worker scrapes/scores/tailors/letters them through the real pipeline ->
 publishes desk-data-live.json so they appear in the app within ~10 minutes.
 

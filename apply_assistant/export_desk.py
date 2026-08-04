@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from . import db as dbm
 from .knockout import seniority_of
 from .paths import DEFAULT_DB, PROJECT_ROOT
+from .util import candidate_name
 
 DESK_JS = PROJECT_ROOT / "review-app" / "desk-data.js"
 ABOUTS_JSON = PROJECT_ROOT / "config" / "company_about.json"
@@ -323,11 +324,11 @@ def build_desk_data(db_path=None, comp_floor=None, limit=200):
             )),
             "letterReal": bool(letter),
             "signoff1": "Sincerely,",
-            "signoff2": "Jordan Rivers",
+            "signoff2": candidate_name(),
             "url": r["url"] or r["apply_url"] or "",
             "applyUrl": apply_url,
             "emailTo": email_to,
-            "subject": (letter or {}).get("subject") or ("Application for " + (r["title"] or "the open role") + " — Jordan Rivers"),
+            "subject": (letter or {}).get("subject") or ("Application for " + (r["title"] or "the open role") + " — " + candidate_name()),
             "attachment": "resume_" + slug + ".pdf",
             "failTest": False,
         })

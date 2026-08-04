@@ -14,6 +14,49 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def candidate_name(default: str = "the candidate") -> str:
+    """The real person's name, from config/profile.json.
+
+    Every place that signs a letter or titles a resume reads this. It used to
+    be a hardcoded template persona, which meant documents went out signed with
+    someone else's name.
+    """
+    import json
+
+    from .paths import PROJECT_ROOT
+
+    for fname in ("profile.json", "profile.example.json"):
+        try:
+            data = json.loads((PROJECT_ROOT / "config" / fname).read_text())
+        except (OSError, ValueError):
+            continue
+        name = ((data.get("candidate") or {}).get("name") or "").strip()
+        if name:
+            return name
+    return default
+
+
+def candidate_voice() -> str:
+    """The candidate's real writing samples (profile/voice_real.md).
+
+    This is what the cover-letter writer imitates. Returns "" when the file is
+    missing or holds only the onboarding placeholder, so callers can fall back
+    rather than feed a placeholder to the model as if it were a voice sample.
+    """
+    from .paths import PROJECT_ROOT
+
+    try:
+        raw = (PROJECT_ROOT / "profile" / "voice_real.md").read_text()
+    except OSError:
+        return ""
+    body = "\n".join(
+        line for line in raw.splitlines() if not line.lstrip().startswith("#")
+    ).strip()
+    if "Paste a few paragraphs" in body or len(body) < 80:
+        return ""
+    return body
+
+
 def clean_html(value: Optional[str]) -> str:
     """Strip HTML tags + unescape entities into readable plain text."""
     if not value:

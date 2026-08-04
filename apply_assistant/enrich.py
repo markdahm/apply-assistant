@@ -100,7 +100,7 @@ def jobs_needing_enrichment(conn, limit=None, include_shortlist_first=True):
         "     OR (posted_at IS NULL AND match_tier IN ('strong','stretch')))"
         "AND (url LIKE 'http%' OR apply_url LIKE 'http%')"
     ).fetchall()
-    # shortlisted jobs first — they're what Jordan actually sees
+    # shortlisted jobs first — they're what the reviewer actually sees
     rows = sorted(rows, key=lambda r: (
         0 if (r["match_tier"] in ("strong", "stretch")) else 1,
         -(r["match_score"] or 0),

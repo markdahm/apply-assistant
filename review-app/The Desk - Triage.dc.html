@@ -165,6 +165,7 @@
         <div style="margin-top:16px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
           <span style="font-size:9px;letter-spacing:0.16em;text-transform:uppercase;color:#9a9082;">Cover letter — in your voice, tap to edit</span>
           <sc-if value="{{ coverEdited }}" hint-placeholder-val="{{ false }}"><span onClick="{{ onResetCover }}" role="button" aria-label="Reset cover letter to the original draft" title="Reset to the original draft" style="cursor:pointer;font-size:9px;letter-spacing:0.04em;color:#6B6258;border:1px solid #D8CFBE;border-radius:2px;padding:2px 7px;">Reset ↺</span></sc-if>
+          <sc-if value="{{ needsLetter }}" hint-placeholder-val="{{ false }}"><span onClick="{{ onGenerateLetter }}" role="button" aria-label="Write a cover letter for this job" title="Generate a cover letter for this job" style="cursor:pointer;white-space:nowrap;font-size:9px;letter-spacing:0.06em;color:#F4EFE4;background:#221E1A;border:1px solid #221E1A;border-radius:2px;padding:3px 9px;">{{ letterCta }}</span></sc-if>
         </div>
         <div ref="{{ coverRef }}" style="margin-top:9px;background:#FBF8F1;border:1px solid #D8CFBE;border-radius:4px;padding:22px 22px 20px;">
           <div style="font-size:11px;color:#9a9082;margin-bottom:13px;">{{ job.letterDate }}</div>
@@ -490,8 +491,8 @@ class Component extends DCLogic {
       .catch(()=>{ if(fallback) fallback(); });
   }
   pdfFileName(j){
-    if(this.state.showBefore&&j&&j.resumeHtml) return 'Resume (original) — Jordan Rivers.pdf';
-    const t=((j&&j.title)||'Resume').replace(/[\\/:*?"<>|]+/g,'-').replace(/\s{2,}/g,' ').trim(); return t+' — Jordan Rivers.pdf';
+    if(this.state.showBefore&&j&&j.resumeHtml) return 'Resume (original) — '+this.candName()+'.pdf';
+    const t=((j&&j.title)||'Resume').replace(/[\\/:*?"<>|]+/g,'-').replace(/\s{2,}/g,' ').trim(); return t+' — '+this.candName()+'.pdf';
   }
   downloadResume(){
     const j=this.cur(); if(!j) return;
@@ -517,21 +518,21 @@ class Component extends DCLogic {
     const paras=body.split(/\n{2,}|\n/).map(t=>t.trim()).filter(Boolean)
       .map(t=>'<p style="margin:0 0 14px;">'+this._esc(t)+'</p>').join('');
     const html='<div style="font-family:Helvetica,Arial,sans-serif;font-size:12.5px;line-height:1.55;color:#111;max-width:640px;margin:0 auto;">'
-      +'<div style="text-align:center;margin-bottom:26px;"><div style="font-size:16px;font-weight:700;">Jordan Rivers</div>'
+      +'<div style="text-align:center;margin-bottom:26px;"><div style="font-size:16px;font-weight:700;">'+this.candName()+'</div>'
       +'<div style="font-size:11.5px;">1720 Grevelia St, South Pasadena, CA 91030</div>'
       +'<div style="font-size:11.5px;">jordan.rivers@example.com | (555) 010-0100</div></div>'
       +'<div style="margin:0 0 18px;">'+this._esc(j.letterDate||'')+'</div>'
       +'<div style="margin:0 0 14px;">'+this._esc(j.salutation||'Dear Hiring Manager,')+'</div>'
       +paras
-      +'<p style="margin:18px 0 0;">Sincerely,</p><p style="margin:4px 0 0;">Jordan Rivers</p></div>';
-    const name='Cover Letter - '+((j.title||'letter').replace(/[\\/:*?"<>|]+/g,'-').replace(/\s{2,}/g,' ').trim())+' — Jordan Rivers.pdf';
+      +'<p style="margin:18px 0 0;">Sincerely,</p><p style="margin:4px 0 0;">'+this.candName()+'</p></div>';
+    const name='Cover Letter - '+((j.title||'letter').replace(/[\\/:*?"<>|]+/g,'-').replace(/\s{2,}/g,' ').trim())+' — '+this.candName()+'.pdf';
     this._pdfViaApi(html,name,()=>{ try{ const w=window.open('','_blank'); w.document.write('<title>'+this._esc(name)+'</title>'+html); w.document.close(); w.print(); }catch(e){} });
   }
   copyCover(){
     const j=this.cur(); if(!j) return;
     const js=this.jstate(j.id);
     const body=(js.cover!=null?js.cover:j.cover)||'';
-    const so=(j.signoff1||'Warmly,')+'\n'+(j.signoff2||'Jordan');
+    const so=(j.signoff1||'Warmly,')+'\n'+(j.signoff2||this.candName());
     const text=(j.salutation?j.salutation+'\n\n':'')+body+'\n\n'+so;
     const done=()=>{ this.setState({copiedCover:true}); clearTimeout(this._ct); this._ct=setTimeout(()=>this.setState({copiedCover:false}),1600); };
     const fallback=()=>{ try{ const ta=document.createElement('textarea'); ta.value=text; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); done(); }catch(e){} };
@@ -582,7 +583,41 @@ class Component extends DCLogic {
   onBodyInput=(e)=>{ this.setJ(this.cur().id,{body:e.target.innerText,bodyTouched:true}); };
   flashSaved(){ this.setState({saved:true}); clearTimeout(this._st); this._st=setTimeout(()=>this.setState({saved:false}),1400); }
   resync(){ const j=this.cur(); this.setJ(j.id,{body:null,bodyTouched:false,emailDesync:false}); }
+  candName(){ const j=this.cur(); return (j&&j.signoff2)||(window.__DESK_META&&window.__DESK_META.candidateName)||'Candidate'; }
+
   resetCover(){ const j=this.cur(); if(!j) return; this.setJ(j.id,{cover:null,coverEdited:false,emailDesync:false}); this.flashSaved(); }
+
+  // Ask the pipeline host to write this one letter. Nothing is generated in
+  // the browser or on Vercel: api/letter only queues the request, and the
+  // worker runs the real letters.py so the honesty validators still apply.
+  generateLetter(){
+    const j=this.cur(); if(!j) return;
+    const st=this.state.letterJobs||{};
+    if(st[j.id]==='working') return;
+    this.setState({letterJobs:{...st,[j.id]:'working'}});
+    fetch('api/letter',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({uid:j.id})})
+      .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); const ct=r.headers.get('content-type')||''; if(ct.indexOf('json')<0) throw new Error('auth'); return r.json(); })
+      .then(()=>this._pollLetter(j.id,0))
+      .catch(()=>this.setState({letterJobs:{...(this.state.letterJobs||{}),[j.id]:'failed'}}));
+  }
+
+  _pollLetter(id,tries){
+    // ~2 minutes, then say so rather than spin forever — the usual cause is
+    // that the worker isn't running on the pipeline host.
+    if(tries>40){ this.setState({letterJobs:{...(this.state.letterJobs||{}),[id]:'slow'}}); return; }
+    setTimeout(()=>{
+      fetch('api/jobs',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(p=>{
+        const hit=(p&&Array.isArray(p.data))?p.data.find(x=>x.id===id):null;
+        if(hit&&hit.letterReal){
+          window.__DESK_DATA=p.data;
+          if(p.resume) window.__DESK_RESUME=p.resume;
+          window.__DESK_GENERATED=p.generatedAt||Date.now();
+          const st={...(this.state.letterJobs||{})}; delete st[id];
+          this.setState({jobs:p.data,letterJobs:st});
+        } else { this._pollLetter(id,tries+1); }
+      }).catch(()=>this._pollLetter(id,tries+1));
+    },3000);
+  }
   resetEmail(){ const j=this.cur(); if(!j) return; this.setJ(j.id,{subject:null,body:null,bodyTouched:false,emailDesync:false}); this.flashSaved(); }
   diffSet(id,lineId,dec){ const dd={...(this.jstate(id).diff||{})}; dd[lineId]=dec; this.setJ(id,{diff:dd}); }
   trace(title,text,source){ this.setState({trace:{title,text,source}}); }
@@ -773,7 +808,7 @@ class Component extends DCLogic {
       v.onDownloadLetter=()=>this.downloadLetter();
       v.copyLabel=s.copiedCover?'Copied ✓':'Copy letter ⧉';
       v.copyBg=s.copiedCover?'#2F4A3C':'#F4EFE4'; v.copyColor=s.copiedCover?'#F4EFE4':'#221E1A';
-      v.signoff1=j.signoff1||'Warmly,'; v.signoff2=j.signoff2||'Jordan';
+      v.signoff1=j.signoff1||'Warmly,'; v.signoff2=j.signoff2||this.candName();
       v.onViewBase=()=>this.trace('Your base resume','Measured against the resume you uploaded Mar 3 — the master copy nothing changes against without showing you.','base_resume.pdf');
 
       const facts=[
@@ -804,6 +839,12 @@ class Component extends DCLogic {
       v.coverInitial=js.cover!=null?js.cover:j.cover;
       v.coverEdited=!!js.coverEdited; v.savedTag=s.saved?' · saved':'';
       v.onCoverInput=this.onCoverInput; v.onResetCover=()=>this.resetCover();
+      // On-demand letters: the button shows whenever this job has no real
+      // letter yet, and stays visible (as status) while one is being written.
+      const lst=(this.state.letterJobs||{})[j.id];
+      v.needsLetter=(!j.letterReal)||!!lst;
+      v.letterCta=lst==='working'?'Writing…':lst==='slow'?'Still writing — worker running?':lst==='failed'?'Failed — retry ✍':'Write this one ✍';
+      v.onGenerateLetter=()=>this.generateLetter();
       v.onTraceCover=()=>this.trace('Traceable, line by line','Each paragraph maps to a real resume bullet — the Atlas migration, the 40% checkout win, the mentoring. Tap any resume line to follow the thread.','nothing here is invented');
 
       // resume

@@ -1,6 +1,6 @@
 """The matching brain: knockout filter -> LLM rubric scoring -> ranked shortlist.
 
-Turns the raw sourced jobs into "the handful Jordan would actually want."
+Turns the raw sourced jobs into "the handful the candidate would actually want."
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ def run_match(db_path=None, profile_path=None, limit=None, rescore=False, method
     survivors = []
     for r in rows:
         if "manual" in r.keys() and r["manual"]:
-            passed, reasons = True, []   # Jordan added it by hand — never knock out
+            passed, reasons = True, []   # added by hand — never knock out
         else:
             passed, reasons = knockout(r, profile)
         dbm.save_knockout(conn, r["uid"], 0 if passed else 1, "; ".join(reasons))

@@ -69,16 +69,21 @@ def publish_live(db_path=None, verbose=True):
     return len(payload["data"])
 
 
-def read_inbox(token=None, skip_ids=None):
-    """List inbox/ entries (one blob per queued link). Fetches bodies only for
-    ids not already in `skip_ids` — the worker's processed ledger."""
+def read_queue(prefix, token=None, skip_ids=None, required_field=None):
+    """List one-blob-per-item queue entries under `prefix`.
+
+    Fetches bodies only for ids not already in `skip_ids` — the worker's
+    processed ledger. `required_field` drops malformed entries missing a key
+    the caller depends on. Shared by the manual-link inbox and the on-demand
+    letter queue so there is a single implementation of the read path.
+    """
     import requests
 
     token = token or _blob_token()
     if not token:
         raise RuntimeError("no BLOB_READ_WRITE_TOKEN")
     skip = skip_ids or set()
-    r = requests.get(BLOB_API, params={"prefix": "inbox/", "limit": "500"},
+    r = requests.get(BLOB_API, params={"prefix": prefix, "limit": "500"},
                      headers={"Authorization": "Bearer " + token}, timeout=30)
     r.raise_for_status()
     entries = []
@@ -93,9 +98,20 @@ def read_inbox(token=None, skip_ids=None):
                              headers={"Authorization": "Bearer " + token}, timeout=30)
             if c.ok:
                 e = c.json()
-                if isinstance(e, dict) and e.get("url"):
+                if isinstance(e, dict) and (not required_field or e.get(required_field)):
                     e.setdefault("id", bid)
                     entries.append(e)
         except (requests.RequestException, ValueError):
             continue
     return entries
+
+
+def read_inbox(token=None, skip_ids=None):
+    """List inbox/ entries (one blob per queued link)."""
+    return read_queue("inbox/", token=token, skip_ids=skip_ids, required_field="url")
+
+
+def read_letter_requests(token=None, skip_ids=None):
+    """List letter-requests/ entries (one blob per on-demand letter click)."""
+    return read_queue("letter-requests/", token=token, skip_ids=skip_ids,
+                      required_field="uid")

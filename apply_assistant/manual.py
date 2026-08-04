@@ -1,9 +1,9 @@
-"""Manual link intake — Jordan pastes a job URL, the engine does the rest.
+"""Manual link intake — the reviewer pastes a job URL, the engine does the rest.
 
 `cli add <url> [...]` (and the inbox worker) route here. Each URL is scraped
 with Firecrawl, parsed into a Job, upserted with manual=1, then scored,
 tailored, and lettered through the SAME pipeline as swept jobs. Manual jobs
-skip the knockout (Jordan chose them) and always ship to the Desk regardless
+skip the knockout (the reviewer chose them) and always ship to the Desk regardless
 of tier.
 """
 
