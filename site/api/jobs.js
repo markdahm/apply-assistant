@@ -13,7 +13,11 @@ module.exports = async (req, res) => {
     const { blobs } = await list({ prefix: PATHNAME });
     const hit = blobs.find((b) => b.pathname === PATHNAME);
     if (!hit) return res.end('{}');
-    const r = await fetch(hit.url + '?v=' + Date.now(), { cache: 'no-store' });
+    // The store is private: a blob URL 403s without the bearer token.
+    const r = await fetch(hit.url + '?v=' + Date.now(), {
+      cache: 'no-store',
+      headers: { Authorization: 'Bearer ' + process.env.BLOB_READ_WRITE_TOKEN },
+    });
     return res.end(r.ok ? (await r.text() || '{}') : '{}');
   } catch (e) {
     res.statusCode = 500;

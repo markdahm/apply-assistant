@@ -30,7 +30,7 @@ from concurrent.futures import ThreadPoolExecutor
 from . import db as dbm
 from .resume_doc import parse_resume
 
-TAILOR_MODEL = os.environ.get("APPLY_TAILOR_MODEL", "claude-opus-4-8")
+TAILOR_MODEL = os.environ.get("APPLY_TAILOR_MODEL", "claude-opus-5")
 MAX_WORKERS = int(os.environ.get("APPLY_TAILOR_WORKERS", "4"))
 PROMPT_VERSION = "v1"
 

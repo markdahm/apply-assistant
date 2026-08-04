@@ -54,6 +54,9 @@ def publish_live(db_path=None, verbose=True):
             "x-add-random-suffix": "0",
             "x-allow-overwrite": "1",
             "x-cache-control-max-age": "60",
+            # The store is configured private. Without this the API rejects the
+            # write outright: "Cannot use public access on a private store."
+            "x-vercel-blob-access": "private",
         },
         data=body,
         timeout=60,
@@ -85,7 +88,9 @@ def read_inbox(token=None, skip_ids=None):
         if not bid or bid in skip:
             continue
         try:
-            c = requests.get(b["url"], params={"v": str(int(time.time()))}, timeout=30)
+            # Private store: reading a blob URL needs the bearer token too.
+            c = requests.get(b["url"], params={"v": str(int(time.time()))},
+                             headers={"Authorization": "Bearer " + token}, timeout=30)
             if c.ok:
                 e = c.json()
                 if isinstance(e, dict) and e.get("url"):

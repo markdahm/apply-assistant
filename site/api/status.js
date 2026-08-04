@@ -27,7 +27,11 @@ module.exports = async (req, res) => {
         res.setHeader('Content-Type', 'application/json');
         return res.end('{}');
       }
-      const r = await fetch(hit.url + '?v=' + Date.now(), { cache: 'no-store' });
+      // The store is private: a blob URL 403s without the bearer token.
+      const r = await fetch(hit.url + '?v=' + Date.now(), {
+        cache: 'no-store',
+        headers: { Authorization: 'Bearer ' + process.env.BLOB_READ_WRITE_TOKEN },
+      });
       const text = r.ok ? await r.text() : '{}';
       res.setHeader('Content-Type', 'application/json');
       return res.end(text || '{}');
@@ -56,7 +60,7 @@ module.exports = async (req, res) => {
         if (Object.keys(clean).length >= 2000) break;
       }
       await put(PATHNAME, JSON.stringify(clean), {
-        access: 'public',
+        access: 'private',
         addRandomSuffix: false,
         allowOverwrite: true,
         contentType: 'application/json',

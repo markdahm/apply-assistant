@@ -19,15 +19,23 @@ module.exports = async (req, res) => {
   const real = process.env.DESK_PASSWORD || '';
   const ok = real && pw.length === real.length &&
     crypto.timingSafeEqual(Buffer.from(pw), Buffer.from(real));
+  // Only ever bounce back to a path on this site — an absolute or scheme-
+  // relative "next" would make this an open redirect. Backslashes are barred
+  // too: some browsers read a leading "/\" as protocol-relative, so "/\evil.com"
+  // would escape the site the same way "//evil.com" does.
+  const raw = params.get('next') || '';
+  const next = /^\/(?![/\\])[^\s\\]*$/.test(raw) ? raw : '/';
+
   if (ok) {
     const tok = crypto.createHash('sha256').update(real).digest('hex');
     res.setHeader('Set-Cookie',
       'desk=' + tok + '; Path=/; Max-Age=7776000; HttpOnly; Secure; SameSite=Lax');
     res.statusCode = 302;
-    res.setHeader('Location', '/');
+    res.setHeader('Location', next);
     return res.end();
   }
   res.statusCode = 302;
-  res.setHeader('Location', '/login?bad=1');
+  res.setHeader('Location', '/login?bad=1' +
+    (next !== '/' ? '&next=' + encodeURIComponent(next) : ''));
   return res.end();
 };

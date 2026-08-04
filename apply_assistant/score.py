@@ -6,7 +6,7 @@ stretch matches reach the human, each with a reason and the gaps surfaced.
 
 Uses the official Anthropic SDK. Default model is Haiku 4.5 — per-job fit
 scoring is a high-volume classification task, the textbook Haiku use case.
-Set APPLY_SCORE_MODEL=claude-opus-4-8 for deeper judgment at higher cost.
+Set APPLY_SCORE_MODEL=claude-opus-5 for deeper judgment at higher cost.
 Falls back to a transparent keyword heuristic when no API key is present.
 """
 

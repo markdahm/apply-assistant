@@ -28,17 +28,27 @@
   <div class="card">
     <h1>The Desk</h1>
     <div class="rule"></div>
-    <div class="sub">Jordan's job queue</div>
+    <div class="sub" id="sub">Private job queue</div>
     <form method="POST" action="/api/login">
       <input type="password" name="password" placeholder="Password" autofocus
              autocomplete="current-password" required>
+      <input type="hidden" name="next" id="next">
       <button type="submit">Enter</button>
     </form>
     <div class="bad" id="bad">That's not it — try again.</div>
   </div>
   <script>
-    if (new URLSearchParams(location.search).get('bad')) {
+    var q = new URLSearchParams(location.search);
+    if (q.get('bad')) {
       document.getElementById('bad').style.display = 'block';
+    }
+    // Carry the requested page through the POST so /onboard links land there.
+    var nxt = q.get('next') || '';
+    if (/^\/(?![/\\])[^\s\\]*$/.test(nxt)) {
+      document.getElementById('next').value = nxt;
+      if (nxt.indexOf('/onboard') === 0) {
+        document.getElementById('sub').textContent = 'Job search setup';
+      }
     }
   </script>
 </body>

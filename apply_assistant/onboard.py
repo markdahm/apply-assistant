@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import re
 import threading
+import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -284,6 +285,11 @@ PAGE = r"""<!doctype html>
     border-radius:10px; padding:11px 18px; font:inherit; cursor:pointer; }
   button:disabled { opacity:.4; cursor:default; }
   .hidden { display:none; }
+  .tips { color:var(--muted); font-size:13px; margin:0 0 10px; padding-left:20px; }
+  .tips li { margin:2px 0; }
+  .err { color:#b4392c; font-size:13px; margin-top:14px; display:none; }
+  .err.on { display:block; }
+  @media (prefers-color-scheme: dark) { .err { color:#f08b7e; } }
   .done { text-align:center; padding:20px 0; }
   .done .big { font-size:40px; }
   .done ul { text-align:left; display:inline-block; color:var(--muted); font-size:13px; }
@@ -293,8 +299,8 @@ PAGE = r"""<!doctype html>
 </head>
 <body>
 <div class="wrap">
-  <h1>Welcome, <span id="who">Aaron</span></h1>
-  <p class="sub">Four quick steps and your job search is wired up. Defaults are set for the South Bay — change anything that's wrong.</p>
+  <h1>Welcome<span id="who"></span></h1>
+  <p class="sub">Four steps, about ten minutes. Defaults are set for the South Bay — change anything that's wrong. Step 3 asks for your resume and a few emails you've written, so it helps to have those open.</p>
   <div class="steps"><div class="on"></div><div></div><div></div><div></div></div>
 
   <form id="f">
@@ -303,7 +309,7 @@ PAGE = r"""<!doctype html>
       <h2>About you</h2>
       <p class="hint">Who the engine is looking for.</p>
       <label>Full name</label>
-      <input type="text" name="name" value="Aaron">
+      <input type="text" name="name" placeholder="Your full name">
       <div class="row">
         <div><label>Email <span class="opt">· optional</span></label><input type="email" name="email"></div>
         <div><label>Phone <span class="opt">· optional</span></label><input type="text" name="phone"></div>
@@ -315,7 +321,9 @@ PAGE = r"""<!doctype html>
       <label>Job titles you're targeting <span class="opt">· comma-separated</span></label>
       <input type="text" name="titles" placeholder="Operations Manager, Program Manager, Business Operations">
       <label>Key skills <span class="opt">· comma-separated</span></label>
-      <input type="text" name="skills" placeholder="Project management, SQL, Excel, vendor management, hiring">
+      <p class="hint" style="margin:0 0 6px">These are matched word-for-word against real job postings, so use the words postings actually use — "roadmap", "cross-functional", "go-to-market". Tools you happen to know, or personal shorthand, will never appear in a posting and will drag every score down. Six to eight is about right.</p>
+      <input type="text" name="skills" placeholder="Product strategy, roadmap, cross-functional, go-to-market, user research, A/B testing">
+      <p class="hint" id="skillsCount"></p>
       <div class="row">
         <div><label>Years of experience</label><input type="number" name="years_experience" min="0" value="5"></div>
         <div><label>Your seniority</label>
@@ -356,14 +364,26 @@ PAGE = r"""<!doctype html>
 
     <!-- Step 3 -->
     <section class="card step hidden" data-step="2">
-      <h2>Your material <span class="opt" style="font-weight:400;color:var(--muted);font-size:13px">· optional</span></h2>
-      <p class="hint">Only needed for tailored resumes and cover letters (which also need an Anthropic API key). You can skip this now and paste it in later.</p>
+      <h2>Your material</h2>
+      <p class="hint">This is the step that decides how good everything else is. Your resume is the fact source — nothing gets written about you that isn't in here. The writing samples are how the cover letters end up sounding like you instead of like a robot.</p>
+
       <label>Paste your resume</label>
-      <textarea name="resume" style="min-height:140px" placeholder="Paste your full resume text. Every tailored line will trace back to something here — nothing gets invented."></textarea>
-      <label>A writing sample in your own voice</label>
-      <textarea name="voice" placeholder="A few paragraphs you actually wrote — an email, a note. Cover letters are copied from this voice."></textarea>
-      <label>Experience bank <span class="opt">· extra true material</span></label>
+      <textarea name="resume" style="min-height:150px" placeholder="Paste your full resume text. Formatting doesn't matter — bullets and line breaks can come out messy from a PDF and that's fine. Every tailored line traces back to something here; nothing gets invented."></textarea>
+      <p class="hint" id="resumeCount"></p>
+
+      <label>Writing samples in your own voice <span class="opt">· three or four</span></label>
+      <p class="hint" style="margin:0 0 8px">Paste a few things you actually wrote — the easiest source is your sent mail. Separate them with a blank line. What works best:</p>
+      <ul class="tips">
+        <li>An email to a colleague explaining a decision</li>
+        <li>A note where you disagreed with someone, or pushed back</li>
+        <li>Anything with an opinion in it — not a status update</li>
+      </ul>
+      <textarea name="voice" style="min-height:150px" placeholder="Paste three or four, separated by a blank line. Don't clean them up — the typos and the shorthand are the point."></textarea>
+      <p class="hint" id="voiceCount"></p>
+
+      <label>Experience bank <span class="opt">· optional, extra true material</span></label>
       <textarea name="experience_bank" placeholder="Expanded bullets, quantified wins, references — anything true that didn't fit the one-page resume."></textarea>
+      <div class="err" id="err3"></div>
     </section>
 
     <!-- Step 4 -->
@@ -385,11 +405,12 @@ PAGE = r"""<!doctype html>
     <h2>You're all set</h2>
     <p class="sub" id="doneMsg"></p>
     <ul id="wrote"></ul>
-    <p class="hint">Next, in your terminal: <code>apply sweep</code> then <code>apply match</code>.</p>
+    <p class="hint" id="localNext">Next, in your terminal: <code>apply sweep</code> then <code>apply match</code>.</p>
   </section>
 </div>
 
 <script>
+  var HOSTED = %%HOSTED%%, ENDPOINT = %%ENDPOINT%%;
   var step = 0, total = 4;
   var stepEls = document.querySelectorAll('.step');
   var bars = document.querySelectorAll('.steps div');
@@ -404,7 +425,9 @@ PAGE = r"""<!doctype html>
   xkw.value = %%XKW%%;
 
   nameInput.addEventListener('input', function(){
-    document.getElementById('who').textContent = nameInput.value || 'there';
+    // Reads "Welcome" until they type, then "Welcome, <name>".
+    var v = nameInput.value.trim();
+    document.getElementById('who').textContent = v ? ', ' + v : '';
   });
 
   function show(){
@@ -414,7 +437,61 @@ PAGE = r"""<!doctype html>
     next.textContent = step===total-1 ? 'Finish' : 'Next';
   }
   back.onclick = function(){ if(step>0){ step--; show(); } };
-  next.onclick = function(){ if(step<total-1){ step++; show(); } else { submit(); } };
+
+  // Step 3 decides how good every tailored resume and letter turns out, so it
+  // is gated rather than skippable — an empty fact source means nothing can be
+  // written, and one thin sample means the letters read generic.
+  var resumeEl = document.querySelector('[name=resume]');
+  var voiceEl = document.querySelector('[name=voice]');
+  var err3 = document.getElementById('err3');
+  var MIN_RESUME = 200, MIN_VOICE = 150;
+
+  function sampleCount(t){
+    return t.split(/\n\s*\n/)
+            .map(function(s){ return s.trim(); })
+            .filter(function(s){ return s.length > 40; }).length;
+  }
+  function counts(){
+    var r = resumeEl.value.trim();
+    document.getElementById('resumeCount').textContent = !r.length ? ''
+      : (r.length < MIN_RESUME
+          ? 'That looks short for a full resume — paste the whole thing.'
+          : '✓ ' + r.length + ' characters');
+    var v = voiceEl.value.trim(), n = sampleCount(v);
+    document.getElementById('voiceCount').textContent = !v.length ? ''
+      : (n <= 1
+          ? 'Reads as 1 sample — two or three more makes the letters noticeably better.'
+          : '✓ ' + n + ' samples');
+  }
+  resumeEl.addEventListener('input', counts);
+  voiceEl.addEventListener('input', counts);
+
+  // Skills are the keyword list the matcher scores against, so show the count —
+  // too few and coverage stays low no matter how good the fit actually is.
+  var skillsEl = document.querySelector('[name=skills]');
+  skillsEl.addEventListener('input', function(){
+    var n = skillsEl.value.split(',').map(function(s){ return s.trim(); }).filter(Boolean).length;
+    document.getElementById('skillsCount').textContent = !n ? ''
+      : (n < 4 ? n + ' skill(s) — a few more gives the matcher more to work with.'
+               : '✓ ' + n + ' skills');
+  });
+
+  function validate3(){
+    if (resumeEl.value.trim().length < MIN_RESUME)
+      return 'Please paste your resume before continuing — every tailored line is built from it, so there is nothing to work with without it.';
+    if (voiceEl.value.trim().length < MIN_VOICE)
+      return 'Please paste at least one real thing you wrote. Without it the cover letters come out generic — this is the single biggest difference in quality.';
+    return null;
+  }
+
+  next.onclick = function(){
+    if (err3) err3.classList.remove('on');
+    if (step === 2) {
+      var problem = validate3();
+      if (problem) { err3.textContent = problem; err3.classList.add('on'); return; }
+    }
+    if(step<total-1){ step++; show(); } else { submit(); }
+  };
 
   // Employer rows
   var emps = document.getElementById('emps');
@@ -445,24 +522,36 @@ PAGE = r"""<!doctype html>
     });
     data.employers = employers;
 
-    fetch('/save', {method:'POST', headers:{'Content-Type':'application/json'},
+    fetch(ENDPOINT, {method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify(data)})
-      .then(function(r){ return r.json(); })
+      .then(function(r){
+        if(!r.ok) throw new Error('server said ' + r.status);
+        return r.json();
+      })
       .then(function(res){
+        if(res.error) throw new Error(res.error);
         document.getElementById('f').classList.add('hidden');
         document.querySelector('.nav').classList.add('hidden');
         document.querySelector('.steps').classList.add('hidden');
-        var card = document.getElementById('doneCard');
-        card.classList.remove('hidden');
-        var extra = res.employers ? (res.employers + ' target employer(s) saved.') : 'No employers yet — add them with apply add later.';
-        document.getElementById('doneMsg').textContent = 'Your profile is written. ' + extra;
-        var ul = document.getElementById('wrote');
-        res.wrote.forEach(function(p){ var li=document.createElement('li'); li.textContent=p; ul.appendChild(li); });
-        fetch('/shutdown', {method:'POST'});
+        document.getElementById('doneCard').classList.remove('hidden');
+        var empCount = res.employers != null ? res.employers : employers.length;
+        var extra = empCount ? (empCount + ' target employer(s) saved.') : 'No employers yet — they can be added later.';
+        if(HOSTED){
+          // The candidate's browser never touches the filesystem — the answers
+          // sit in the queue until the pipeline host pulls them down.
+          document.getElementById('doneMsg').textContent =
+            'Your answers are in. ' + extra + ' Nothing else to do — Mark picks it up from here.';
+          document.getElementById('localNext').classList.add('hidden');
+        } else {
+          document.getElementById('doneMsg').textContent = 'Your profile is written. ' + extra;
+          var ul = document.getElementById('wrote');
+          (res.wrote || []).forEach(function(p){ var li=document.createElement('li'); li.textContent=p; ul.appendChild(li); });
+          fetch('/shutdown', {method:'POST'});
+        }
       })
       .catch(function(e){
         next.disabled=false; back.disabled=false; next.textContent='Finish';
-        alert('Save failed: ' + e);
+        alert('Save failed: ' + e.message + '\n\nNothing was lost — this page still has your answers. Try Finish again.');
       });
   }
   show();
@@ -472,11 +561,91 @@ PAGE = r"""<!doctype html>
 """
 
 
-def _render_page():
+def _render_page(hosted=False):
+    """The onboarding form. One template, two homes.
+
+    Local (``hosted=False``): served on localhost, posts to ``/save``, writes
+    the files directly, then shuts the server down.
+
+    Hosted (``hosted=True``): baked into ``site/onboard.html`` and deployed
+    behind the Desk's password gate so the candidate can fill it in remotely,
+    on their own time. It posts to ``/api/onboard``, which parks the answers in
+    Vercel Blob; ``apply onboard --fetch`` pulls them down and writes the same
+    files through the same ``save_all()``. Same form, same result, one source.
+    """
+    endpoint = "/api/onboard" if hosted else "/save"
     return (PAGE
             .replace("%%LOCATIONS%%", json.dumps(", ".join(SOUTH_BAY_LOCATIONS)))
             .replace("%%XROLE%%", json.dumps(", ".join(DEFAULT_EXCLUDE_ROLE)))
-            .replace("%%XKW%%", json.dumps(", ".join(DEFAULT_EXCLUDE_KW))))
+            .replace("%%XKW%%", json.dumps(", ".join(DEFAULT_EXCLUDE_KW)))
+            .replace("%%HOSTED%%", "true" if hosted else "false")
+            .replace("%%ENDPOINT%%", json.dumps(endpoint)))
+
+
+def emit_html(path, hosted=True):
+    """Write the standalone form to `path` (deploy.sh bakes site/onboard.html).
+
+    Generated at deploy time rather than kept as a second copy, so the hosted
+    form can never drift from the local one.
+    """
+    from pathlib import Path
+
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(_render_page(hosted=hosted))
+    return str(p)
+
+
+# --- Remote submissions ---------------------------------------------------
+
+BLOB_PREFIX = "onboard/"
+
+
+def read_submissions(token=None):
+    """List queued onboarding submissions, newest last.
+
+    Reads Vercel Blob directly with BLOB_READ_WRITE_TOKEN — the same path
+    publish.py uses, so no Vercel CLI and no site password are needed here.
+    """
+    import requests
+
+    from .publish import BLOB_API, _blob_token
+
+    token = token or _blob_token()
+    if not token:
+        raise RuntimeError(
+            "no BLOB_READ_WRITE_TOKEN — set it in .env to pull remote submissions")
+    r = requests.get(BLOB_API, params={"prefix": BLOB_PREFIX, "limit": "100"},
+                     headers={"Authorization": "Bearer " + token}, timeout=30)
+    r.raise_for_status()
+    out = []
+    for b in r.json().get("blobs", []):
+        try:
+            # Private store: reading a blob URL needs the bearer token too.
+            c = requests.get(b["url"], params={"v": str(int(time.time()))},
+                             headers={"Authorization": "Bearer " + token}, timeout=30)
+            if not c.ok:
+                continue
+            entry = c.json()
+        except (requests.RequestException, ValueError):
+            continue
+        if isinstance(entry, dict) and isinstance(entry.get("payload"), dict):
+            entry.setdefault("submittedAt", 0)
+            out.append(entry)
+    out.sort(key=lambda e: e.get("submittedAt") or 0)
+    return out
+
+
+def fetch_and_save(token=None, index=None):
+    """Pull the newest remote submission and write the local profile files.
+
+    Returns (report, entry). Raises if nothing has been submitted yet.
+    """
+    subs = read_submissions(token=token)
+    if not subs:
+        raise RuntimeError("no submissions in the queue yet")
+    entry = subs[index] if index is not None else subs[-1]
+    return save_all(entry["payload"]), entry
 
 
 class _Handler(BaseHTTPRequestHandler):

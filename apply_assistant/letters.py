@@ -18,7 +18,7 @@ from concurrent.futures import ThreadPoolExecutor
 from . import db as dbm
 from .paths import DEFAULT_DB, PROJECT_ROOT
 
-LETTER_MODEL = os.environ.get("APPLY_LETTER_MODEL", "claude-opus-4-8")
+LETTER_MODEL = os.environ.get("APPLY_LETTER_MODEL", "claude-opus-5")
 MAX_WORKERS = int(os.environ.get("APPLY_LETTER_WORKERS", "4"))
 PROMPT_VERSION = "v1"
 

@@ -86,7 +86,24 @@ extra deps) that walks the person through four steps and writes
 them — location defaults are pre-set for a South Bay job search. It never
 clobbers existing files (it backs them up to `*.bak` first). Prefer to do it by
 hand? Create `config/profile.json` from `config/profile.example.json` and the
-files in [`profile/`](profile/README.md) yourself. Then:
+files in [`profile/`](profile/README.md) yourself.
+
+**When the candidate isn't at your keyboard.** The local form only listens on
+localhost, so for someone remote the same form is deployed with the review app
+at `/onboard`, behind the Desk's password. They fill it in on their own time;
+their answers park in Vercel Blob; you pull them down when they're ready:
+
+```bash
+apply onboard --check             # who's submitted, and when
+apply onboard --fetch             # newest submission -> the same local files
+```
+
+`--fetch` runs the identical `save_all()` the local form uses, so both routes
+produce byte-identical output (and the same `*.bak` protection). The hosted page
+is *generated* from the same template at deploy time — `site/deploy.sh` bakes it
+via `apply onboard --emit-html` — so the two forms cannot drift apart. Pulling
+needs `BLOB_READ_WRITE_TOKEN`; it reads Blob directly, so no Vercel CLI on the
+pipeline host. Then:
 
 ```bash
 apply sweep                       # pull every source into the DB
@@ -132,6 +149,9 @@ at `/m` and serverless functions for:
 - `api/pdf` — render edited resume/letter HTML to a one-page PDF (headless Chromium)
 - `api/inbox` — queue manually-added job links (one blob per link, no lost updates)
 - `api/jobs` — serve the freshest published dataset so new jobs appear without a redeploy
+- `api/onboard` — accept a remote candidate's onboarding answers (one blob per
+  submission; the blob carries real personal data, so it gets an unguessable
+  suffix and the page sits behind the password gate)
 
 `apply export` writes the data the app reads; `apply publish` (or the daily job)
 pushes it live.

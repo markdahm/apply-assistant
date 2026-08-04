@@ -19,5 +19,12 @@ export default async function middleware(req) {
     const expected = await sha256hex(process.env.DESK_PASSWORD || '');
     if (m[1] === expected) return next();
   }
-  return Response.redirect(new URL('/login', req.url), 302);
+  // Remember where they were headed, so a link straight to /onboard survives
+  // the login round-trip instead of dumping them on the Desk.
+  const dest = new URL('/login', req.url);
+  const here = new URL(req.url);
+  if (here.pathname && here.pathname !== '/') {
+    dest.searchParams.set('next', here.pathname + here.search);
+  }
+  return Response.redirect(dest, 302);
 }

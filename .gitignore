@@ -17,7 +17,9 @@ profile/samples/
 review-app/desk-data.js
 site/desk-data.js
 site/desk.html
+site/onboard.html
 **/resume_*.pdf
+**/resume.pdf
 **/resume.html
 
 # Secrets & env

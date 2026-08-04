@@ -23,7 +23,11 @@ module.exports = async (req, res) => {
       const { blobs } = await list({ prefix: 'inbox/', limit: 200 });
       const entries = await Promise.all(blobs.slice(-60).map(async (b) => {
         try {
-          const r = await fetch(b.url, { cache: 'no-store' });
+          // The store is private: a blob URL 403s without the bearer token.
+          const r = await fetch(b.url, {
+            cache: 'no-store',
+            headers: { Authorization: 'Bearer ' + process.env.BLOB_READ_WRITE_TOKEN },
+          });
           return r.ok ? await r.json() : null;
         } catch (e) { return null; }
       }));
@@ -46,7 +50,7 @@ module.exports = async (req, res) => {
         seen.add(url);
         const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
         await put('inbox/' + id + '.json', JSON.stringify({ id, url, addedAt: Date.now() }), {
-          access: 'public', addRandomSuffix: false, contentType: 'application/json',
+          access: 'private', addRandomSuffix: false, contentType: 'application/json',
         });
         queued += 1;
       }

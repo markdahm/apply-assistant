@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 
 from . import db as dbm
 from .classify import LANE_LABELS
@@ -173,8 +174,49 @@ def cmd_tailor(args):
 
 
 def cmd_onboard(args):
-    from .onboard import run_onboard
-    run_onboard(port=args.port, open_browser=not args.no_open)
+    from . import onboard as ob
+
+    if args.emit_html:
+        print("wrote {0}".format(ob.emit_html(args.emit_html)))
+        return
+
+    if args.check:
+        try:
+            subs = ob.read_submissions()
+        except RuntimeError as e:
+            print("Can't read the queue: {0}".format(e))
+            return
+        if not subs:
+            print("No remote submissions yet.")
+            return
+        print("{0} submission(s) waiting:".format(len(subs)))
+        for i, e in enumerate(subs):
+            when = time.strftime("%Y-%m-%d %H:%M",
+                                 time.localtime((e.get("submittedAt") or 0) / 1000))
+            print("  [{0}] {1:20} {2}".format(
+                i, (e.get("payload", {}).get("name") or "(unnamed)")[:20], when))
+        print("\nPull the newest with `apply onboard --fetch`.")
+        return
+
+    if args.fetch:
+        try:
+            report, entry = ob.fetch_and_save(index=args.pick)
+        except (RuntimeError, IndexError) as e:
+            print("Nothing pulled: {0}".format(e))
+            return
+        name = entry.get("payload", {}).get("name") or "(unnamed)"
+        print("Pulled submission from: {0}".format(name))
+        for p in report["wrote"]:
+            print("    wrote   {0}".format(p))
+        for b in report["backed_up"]:
+            print("    backup  {0}".format(b))
+        if report.get("sources"):
+            print("  {0} target employer(s) routed into config/sources.json".format(
+                report["employers"]))
+        print("\nNext: `apply sweep` then `apply match`.")
+        return
+
+    ob.run_onboard(port=args.port, open_browser=not args.no_open)
 
 
 def cmd_show(args):
@@ -197,9 +239,17 @@ def main(argv=None):
     p.add_argument("--db", default=str(DEFAULT_DB), help="SQLite DB path")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    s = sub.add_parser("onboard", help="launch the web onboarding app to set up a candidate")
+    s = sub.add_parser("onboard", help="set up a candidate (local form, or pull a remote one)")
     s.add_argument("--port", type=int, default=8765, help="port for the local onboarding app")
     s.add_argument("--no-open", action="store_true", help="don't auto-open the browser")
+    s.add_argument("--check", action="store_true",
+                   help="list remote submissions waiting in the queue")
+    s.add_argument("--fetch", action="store_true",
+                   help="pull the newest remote submission and write the profile files")
+    s.add_argument("--pick", type=int, default=None,
+                   help="with --fetch: index from --check instead of the newest")
+    s.add_argument("--emit-html", metavar="PATH", default=None,
+                   help="write the standalone hosted form (used by site/deploy.sh)")
     s.set_defaults(func=cmd_onboard)
 
     s = sub.add_parser("sweep", help="pull all sources into the DB")
