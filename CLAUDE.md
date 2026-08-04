@@ -77,6 +77,19 @@ with the human** — Firecrawl is read-only and never submits an application.
   is the easiest source. `save_all()` still keeps its placeholder fallbacks, since
   the local form and the API can be driven directly.
 
+## Running the CLI on this Mac
+
+**`apply` collides with macOS's own `/usr/bin/apply`.** Without the virtualenv
+active, `apply sweep` runs the BSD `apply(1)` utility instead and fails with a
+confusing `command not found: <first argument>`. Either activate the venv, or
+call the entry point by path — which needs no activation:
+
+```bash
+/Users/markdahm/Desktop/OS/development/apply-assistant/.venv/bin/apply <command>
+```
+
+Every bare `apply …` line in the README assumes an active venv.
+
 ## On-demand cover letters
 
 The Desk has a **"Write this one ✍"** button on any job without a letter. It

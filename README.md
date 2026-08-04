@@ -120,6 +120,11 @@ apply add <url> [<url> ...]       # hand-add a posting: scrape → score → tai
 `apply` is the console entry point (installed by `pip install -e .`); every
 command is also reachable as `python -m apply_assistant.cli <command>`.
 
+> **macOS:** activate the virtualenv before using the bare `apply` command.
+> macOS ships its own `/usr/bin/apply`, which otherwise shadows this one and
+> fails with `command not found: <first argument>`. `.venv/bin/apply <command>`
+> works without activating.
+
 ### Keys & degradation
 
 Every API key is optional and the engine degrades gracefully:
