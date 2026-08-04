@@ -139,6 +139,29 @@ polls `api/jobs` until `letterReal` flips, ~20–40s.
 - **Single-writer SQLite.** One host owns `jobs.db`. Never put it on a sync
   drive; two writers through a sync layer corrupt it silently.
 
+## Considered and deferred
+
+**Provenance highlighting in the cover letter** — considered 3 August 2026, deferred.
+
+The tailored resume highlights changed lines because tailoring is a constrained
+permutation: each output bullet carries a `source` index into the base resume,
+so `changed` is computable. **A cover letter has no "before" to diff against**,
+so the same mechanism cannot apply — this is by design, not a missing feature.
+The letter's equivalent guarantee is the validator (every number traces to the
+fact sources, employer named, banned phrases rejected, fails closed).
+
+The idea worth keeping: not diff highlighting but **per-claim provenance** —
+tap a sentence, see which resume bullet supports it. Stronger than today's
+check, which confirms each number appears *somewhere* in the facts rather than
+that a specific claim traces to a specific line. It would need `letters.py` to
+return paragraph→bullet mappings alongside the text, the validator to verify
+each mapping actually supports its claim, and a tap affordance in the Desk. The
+`trace()` plumbing and `mapsTo` concept already exist from the resume diff.
+
+Deferred because the letters are already fact-validated and a human reads every
+one before sending, so the marginal safety is small next to getting the first
+candidate onboarded. Revisit if letter volume makes spot-checking tedious.
+
 ## How to work here
 
 - Mark is technical (three decades on the architectural side at Adobe). Don't
