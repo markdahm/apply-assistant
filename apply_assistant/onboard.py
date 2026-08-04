@@ -301,6 +301,10 @@ PAGE = r"""<!doctype html>
 <div class="wrap">
   <h1>Welcome<span id="who"></span></h1>
   <p class="sub">Four steps, about ten minutes. Defaults are set for the South Bay — change anything that's wrong. Step 3 asks for your resume and a few emails you've written, so it helps to have those open.</p>
+  <div id="editing" class="hidden" style="background:#eef4ff;border:1px solid #cbdcff;border-radius:10px;padding:10px 13px;margin:0 0 18px;font-size:13px;color:#2c4b8a;">
+    Editing what you sent <span id="editedWhen">before</span> — change anything and send it again.
+    <span id="startFresh" role="button" tabindex="0" style="cursor:pointer;text-decoration:underline;margin-left:6px;">Start over instead</span>
+  </div>
   <div class="steps"><div class="on"></div><div></div><div></div><div></div></div>
 
   <form id="f">
@@ -420,9 +424,10 @@ PAGE = r"""<!doctype html>
   var xrole = document.querySelector('[name=exclude_role_keywords]');
   var xkw = document.querySelector('[name=exclude_keywords]');
 
-  locInput.value = %%LOCATIONS%%;
-  xrole.value = %%XROLE%%;
-  xkw.value = %%XKW%%;
+  var DEFAULTS = {locations: %%LOCATIONS%%, exclude_role_keywords: %%XROLE%%, exclude_keywords: %%XKW%%};
+  locInput.value = DEFAULTS.locations;
+  xrole.value = DEFAULTS.exclude_role_keywords;
+  xkw.value = DEFAULTS.exclude_keywords;
 
   nameInput.addEventListener('input', function(){
     // Reads "Welcome" until they type, then "Welcome, <name>".
@@ -505,6 +510,62 @@ PAGE = r"""<!doctype html>
   }
   document.getElementById('addemp').onclick = addRow;
   addRow();
+
+  // Round-trip. The stored submission mirrors this form field-for-field, so a
+  // returning candidate refines what they wrote instead of retyping it. The
+  // blob is the record of what they said; everything downstream is derived.
+  function fillForm(p){
+    Object.keys(p||{}).forEach(function(k){
+      if(k === 'employers') return;
+      var el = document.querySelector('[name='+k+']');
+      if(!el) return;
+      if(el.type === 'checkbox') el.checked = !!p[k];
+      else if(p[k] != null) el.value = p[k];
+    });
+    var rows_in = (p && p.employers) || [];
+    if(rows_in.length){
+      emps.innerHTML = '';
+      rows_in.forEach(function(e){
+        addRow();
+        var rows = document.querySelectorAll('.emp');
+        var r = rows[rows.length-1];
+        r.querySelector('.en').value = e.name || '';
+        r.querySelector('.eu').value = e.url || '';
+      });
+    }
+    // Re-run the live counters so the ✓ hints match what was just filled in.
+    nameInput.dispatchEvent(new Event('input'));
+    skillsEl.dispatchEvent(new Event('input'));
+    counts();
+  }
+
+  if(HOSTED){
+    fetch('api/onboard?include=payload',{cache:'no-store'})
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(d){
+        if(!d || !d.payload) return;
+        fillForm(d.payload);
+        if(d.submittedAt){
+          document.getElementById('editedWhen').textContent =
+            'on ' + new Date(d.submittedAt).toLocaleDateString(undefined,{month:'long',day:'numeric'});
+        }
+        document.getElementById('editing').classList.remove('hidden');
+      })
+      .catch(function(){ /* pre-fill is a convenience — a blank form still works */ });
+  }
+
+  document.getElementById('startFresh').onclick = function(){
+    document.getElementById('f').reset();
+    emps.innerHTML = ''; addRow();
+    locInput.value = DEFAULTS.locations;
+    xrole.value = DEFAULTS.exclude_role_keywords;
+    xkw.value = DEFAULTS.exclude_keywords;
+    document.getElementById('editing').classList.add('hidden');
+    nameInput.dispatchEvent(new Event('input'));
+    skillsEl.dispatchEvent(new Event('input'));
+    counts();
+    step = 0; show();
+  };
 
   function submit(){
     next.disabled = true; back.disabled = true; next.textContent = 'Saving…';

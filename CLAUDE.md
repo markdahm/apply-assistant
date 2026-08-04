@@ -90,6 +90,25 @@ call the entry point by path — which needs no activation:
 
 Every bare `apply …` line in the README assumes an active venv.
 
+## The onboarding form round-trips
+
+A returning candidate sees their previous answers pre-filled and edits them,
+rather than retyping everything. `GET /api/onboard?include=payload` returns the
+newest submission (password-gated, same as the rest of the site) and the hosted
+form populates itself; a banner says what they're editing, with a "Start over
+instead" escape.
+
+**The blob is the record of what the candidate said; everything local is
+derived from it.** `--fetch` takes the newest submission and overwrites
+`config/profile.json` and `profile/*.md` — so don't hand-edit those expecting
+edits to survive. If something in the profile is wrong, fix it in the form and
+re-fetch. The resume is normalized on the way in, but the blob keeps the
+candidate's original paste, which is what they see when they return.
+
+Each edit writes a new blob, so submissions accumulate. `--fetch` always takes
+the newest, so this is only cosmetic noise in `--check`; clear old ones
+periodically.
+
 ## On-demand cover letters
 
 The Desk has a **"Write this one ✍"** button on any job without a letter. It

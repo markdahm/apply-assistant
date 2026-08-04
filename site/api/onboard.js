@@ -64,16 +64,40 @@ module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('Content-Type', 'application/json');
   try {
-    // Lightweight "has anything arrived yet?" check — metadata only, never the
-    // submitted personal data.
+    // Default: metadata only, never the submitted personal data.
+    // ?include=payload returns the newest submission so the form can pre-fill
+    // and the candidate can refine their answers instead of retyping them.
+    // Safe behind middleware.js — and the Desk already displays this person's
+    // resume to anyone holding the password.
     if (req.method === 'GET') {
       const { blobs } = await list({ prefix: 'onboard/', limit: 100 });
-      return res.end(JSON.stringify({
+      const out = {
         count: blobs.length,
         latest: blobs.length
           ? blobs.map((b) => b.uploadedAt).sort().slice(-1)[0]
           : null,
-      }));
+      };
+      const url = new URL(req.url, 'http://x');
+      if (url.searchParams.get('include') === 'payload' && blobs.length) {
+        const newest = blobs.slice().sort(
+          (a, b) => new Date(a.uploadedAt) - new Date(b.uploadedAt),
+        ).pop();
+        try {
+          // Private store: the blob URL needs the bearer token.
+          const r = await fetch(newest.url, {
+            cache: 'no-store',
+            headers: { Authorization: 'Bearer ' + process.env.BLOB_READ_WRITE_TOKEN },
+          });
+          if (r.ok) {
+            const entry = await r.json();
+            out.payload = entry.payload || null;
+            out.submittedAt = entry.submittedAt || null;
+          }
+        } catch (e) {
+          out.payload = null;   // pre-fill is a convenience; never fail the page
+        }
+      }
+      return res.end(JSON.stringify(out));
     }
 
     if (req.method === 'POST') {
