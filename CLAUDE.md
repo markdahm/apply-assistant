@@ -90,6 +90,24 @@ call the entry point by path — which needs no activation:
 
 Every bare `apply …` line in the README assumes an active venv.
 
+## What the resume has to contain
+
+Step 3 lists the categories and ticks them off live as the candidate pastes,
+because a resume missing them fails *downstream*, expensively:
+
+| Category | Why the pipeline needs it |
+|---|---|
+| Name, email, phone, city | Renders the resume header and the letter contact block |
+| **Title, employer, dates per job** | **Hard requirement** — no parsed roles means `base_for_tailoring` returns `roles: []` and every tailoring attempt fails |
+| Bullets per job | Tailoring is a 1:1 permutation of these; no bullets, nothing to permute |
+| Numbers in the bullets | A cover letter may only cite figures that appear in the fact sources. A resume that says "grew revenue" without the number can never produce a letter that quotes it |
+| Skills / competencies list | The tailor reorders and subsets it; it may not add to it |
+| Education | Part of the rendered document and the fact base |
+
+The detection is heuristic (date ranges, bullet-prefixed lines, an email or
+phone, section keywords) and deliberately advisory — it never blocks submission,
+it just makes a thin resume visible before it costs a failed tailoring run.
+
 ## The onboarding form round-trips
 
 A returning candidate sees their previous answers pre-filled and edits them,

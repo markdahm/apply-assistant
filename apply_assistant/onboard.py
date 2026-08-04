@@ -287,6 +287,10 @@ PAGE = r"""<!doctype html>
   .hidden { display:none; }
   .tips { color:var(--muted); font-size:13px; margin:0 0 10px; padding-left:20px; }
   .tips li { margin:2px 0; }
+  .needs { list-style:none; padding-left:2px; }
+  .needs .mk { display:inline-block; width:15px; color:var(--muted); font-weight:700; }
+  .needs li.found { color:var(--ink); }
+  .needs li.found .mk { color:var(--ok); }
   .err { color:#b4392c; font-size:13px; margin-top:14px; display:none; }
   .err.on { display:block; }
   @media (prefers-color-scheme: dark) { .err { color:#f08b7e; } }
@@ -372,7 +376,16 @@ PAGE = r"""<!doctype html>
       <p class="hint">This is the step that decides how good everything else is. Your resume is the fact source — nothing gets written about you that isn't in here. The writing samples are how the cover letters end up sounding like you instead of like a robot.</p>
 
       <label>Paste your resume</label>
-      <textarea name="resume" style="min-height:150px" placeholder="Paste your full resume text. Formatting doesn't matter — bullets and line breaks can come out messy from a PDF and that's fine. Every tailored line traces back to something here; nothing gets invented."></textarea>
+      <p class="hint" style="margin:0 0 8px">Formatting doesn't matter — messy line breaks from a PDF are fine. What matters is that these are <em>in</em> it, because everything downstream is built from them and nothing gets invented:</p>
+      <ul class="tips needs" id="resumeNeeds">
+        <li data-k="contact"><span class="mk">·</span> Your name, email, phone, and city</li>
+        <li data-k="roles"><span class="mk">·</span> Every job: <strong>title, employer, and dates</strong></li>
+        <li data-k="bullets"><span class="mk">·</span> What you did in each job, as separate lines</li>
+        <li data-k="numbers"><span class="mk">·</span> The numbers you'd want a cover letter to be able to quote — <em>a letter can only use figures that appear here</em></li>
+        <li data-k="skills"><span class="mk">·</span> A skills or core-competencies list</li>
+        <li data-k="education"><span class="mk">·</span> Education</li>
+      </ul>
+      <textarea name="resume" style="min-height:150px" placeholder="Paste your full resume text."></textarea>
       <p class="hint" id="resumeCount"></p>
 
       <label>Writing samples in your own voice <span class="opt">· three or four</span></label>
@@ -456,12 +469,45 @@ PAGE = r"""<!doctype html>
             .map(function(s){ return s.trim(); })
             .filter(function(s){ return s.length > 40; }).length;
   }
+  // Heuristic, deliberately generous — this is a nudge, not a gate. The point
+  // is that a resume with no dates or bullets parses to zero roles downstream
+  // and nothing can be tailored from it, so say so while it's still cheap.
+  function resumeSignals(t){
+    var lines = t.split('\n');
+    var ranges = t.match(/\b(19|20)\d{2}\s*(?:[-–—]|to)\s*(?:(19|20)\d{2}|present|current|now)\b/gi) || [];
+    var bullets = lines.filter(function(l){ return /^\s*([•*\-•●]|\d+\.)\s+\S/.test(l); }).length;
+    return {
+      contact: /[\w.+-]+@[\w-]+\.[a-z]{2,}/i.test(t) || /\(?\d{3}\)?[ .\-]?\d{3}[ .\-]?\d{4}/.test(t),
+      roles: ranges.length >= 1,
+      bullets: bullets >= 3,
+      // Any digits beyond the years themselves — those are what a letter may cite.
+      numbers: /\d/.test(t.replace(/\b(19|20)\d{2}\b/g, '')),
+      skills: /\b(skills|competenc|expertise|proficien|technolog)/i.test(t),
+      education: /\b(education|university|college|degree|b\.?s\.?\b|b\.?a\.?\b|m\.?b\.?a\.?)/i.test(t)
+    };
+  }
+
+  function paintNeeds(t){
+    var sig = resumeSignals(t);
+    var missing = 0;
+    document.querySelectorAll('#resumeNeeds li').forEach(function(li){
+      var ok = !!sig[li.getAttribute('data-k')];
+      li.classList.toggle('found', ok);
+      li.querySelector('.mk').textContent = ok ? '✓' : '·';
+      if(!ok) missing++;
+    });
+    return missing;
+  }
+
   function counts(){
     var r = resumeEl.value.trim();
+    var missing = paintNeeds(r);
     document.getElementById('resumeCount').textContent = !r.length ? ''
       : (r.length < MIN_RESUME
           ? 'That looks short for a full resume — paste the whole thing.'
-          : '✓ ' + r.length + ' characters');
+          : missing
+            ? r.length + ' characters — ' + missing + ' item(s) above not spotted yet. Worth a look before you send.'
+            : '✓ ' + r.length + ' characters, and everything above is in there.');
     var v = voiceEl.value.trim(), n = sampleCount(v);
     document.getElementById('voiceCount').textContent = !v.length ? ''
       : (n <= 1
