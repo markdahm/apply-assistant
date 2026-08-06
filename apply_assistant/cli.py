@@ -208,6 +208,18 @@ def cmd_onboard(args):
         print("\nPull the newest with `apply onboard --fetch`.")
         return
 
+    if args.diff:
+        try:
+            changed, lines = ob.diff_pending()
+        except RuntimeError as e:
+            print("Can't read the queue: {0}".format(e))
+            return 1
+        for ln in lines:
+            print(ln)
+        # Exit 2 means "a human should look at this" — a scheduled run keys off
+        # this rather than applying the change unattended.
+        return 2 if changed else 0
+
     if args.fetch:
         try:
             report, entry = ob.fetch_and_save(index=args.pick)
@@ -279,6 +291,9 @@ def main(argv=None):
                    help="pull the newest remote submission and write the profile files")
     s.add_argument("--pick", type=int, default=None,
                    help="with --fetch: index from --check instead of the newest")
+    s.add_argument("--diff", action="store_true",
+                   help="report what the newest submission would change, without writing "
+                        "(exit 2 if a human should look)")
     s.add_argument("--emit-html", metavar="PATH", default=None,
                    help="write the standalone hosted form (used by site/deploy.sh)")
     s.set_defaults(func=cmd_onboard)
@@ -347,7 +362,9 @@ def main(argv=None):
     s.set_defaults(func=cmd_add)
 
     args = p.parse_args(argv)
-    args.func(args)
+    # Propagate a command's exit code so scripts can branch on it (onboard
+    # --diff returns 2 when a submission is waiting). None still means success.
+    return args.func(args) or 0
 
 
 if __name__ == "__main__":

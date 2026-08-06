@@ -33,6 +33,12 @@ INBOX_LEDGER = DEFAULT_DB.parent / "inbox-processed.json"
 # authority rule as INBOX_LEDGER — never share it between hosts.
 LETTER_LEDGER = DEFAULT_DB.parent / "letter-requests-processed.json"
 
+# Which onboarding submission this host last applied. Lets `onboard --diff`
+# report exactly what the candidate changed since, rather than guessing by
+# comparing derived files — resume.md is rebuilt with a generated header, so it
+# never matches the raw paste and a file comparison always reads as "changed".
+FETCH_LEDGER = DEFAULT_DB.parent / "last-fetched-submission.json"
+
 # Optional: drop pre-scraped Firecrawl board results here as JSON to feed the
 # engine without a live FIRECRAWL_API_KEY.
 FIRECRAWL_INBOX = DATA_DIR / "firecrawl_inbox"

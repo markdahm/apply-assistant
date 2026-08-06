@@ -24,7 +24,7 @@ import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from .paths import PROJECT_ROOT
+from .paths import FETCH_LEDGER, PROJECT_ROOT
 
 CONFIG_DIR = PROJECT_ROOT / "config"
 PROFILE_DIR = PROJECT_ROOT / "profile"
@@ -257,6 +257,98 @@ def build_jsearch_queries(payload, title_limit=4, skill_limit=3, place_limit=3):
             seen.add(q.lower())
             out.append(q)
     return out
+
+
+def _read_fetch_ledger():
+    try:
+        return json.loads(FETCH_LEDGER.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def _write_fetch_ledger(entry):
+    FETCH_LEDGER.parent.mkdir(parents=True, exist_ok=True)
+    FETCH_LEDGER.write_text(json.dumps({
+        "id": entry.get("id"),
+        "submittedAt": entry.get("submittedAt"),
+        "appliedAt": int(time.time() * 1000),
+    }, indent=2))
+
+
+def _summarize(a, b):
+    """One line describing how value a became value b."""
+    if isinstance(a, list) and isinstance(b, list):
+        added = [x for x in b if x not in a]
+        removed = [x for x in a if x not in b]
+        bits = []
+        if added:
+            bits.append("added {0}".format(added))
+        if removed:
+            bits.append("removed {0}".format(removed))
+        return "; ".join(bits) or "reordered"
+    sa, sb = str(a or ""), str(b or "")
+    if len(sa) > 60 or len(sb) > 60:
+        return "text changed ({0} -> {1} chars)".format(len(sa), len(sb))
+    return "{0!r} -> {1!r}".format(a, b)
+
+
+def diff_pending(token=None):
+    """What the newest submission would change, WITHOUT writing anything.
+
+    `--fetch` overwrites `config/profile.json` and every `profile/*.md` from the
+    candidate's newest answers. It is the one destructive step in the pipeline
+    and its effects are invisible until the next `match` — a single reworded
+    titles field once cut the survivor list from 27 to 11 and removed every
+    posting from the best employer in it. So a scheduled run reports and stops;
+    applying stays a human decision taken while someone watches the numbers.
+
+    Compares submission to submission using the ledger of what was last applied,
+    rather than comparing derived files. `resume.md` is rebuilt with a generated
+    header, so a file comparison always reads as "changed".
+
+    Returns (changed_fields, report_lines). Empty list means nothing pending.
+    """
+    subs = read_submissions(token=token)
+    if not subs:
+        return [], ["No submissions in the queue."]
+
+    newest = subs[-1]
+    when = time.strftime("%Y-%m-%d %H:%M",
+                         time.localtime((newest.get("submittedAt") or 0) / 1000))
+    who = (newest.get("payload", {}).get("name") or "unnamed")
+    ledger = _read_fetch_ledger()
+
+    if ledger.get("id") and ledger["id"] == newest.get("id"):
+        return [], ["Up to date — newest submission ({0}) is already applied.".format(when)]
+
+    prior = next((s for s in subs if s.get("id") == ledger.get("id")), None)
+    if prior is None:
+        # No ledger yet (or the applied submission has been cleared from the
+        # queue). Say so plainly rather than inventing a field-level diff.
+        n = len(subs)
+        return ["(unknown)"], [
+            "A submission from {0} ({1}) has not been applied on this machine.".format(who, when),
+            "  No record of which submission was last fetched, so I can't say what changed.",
+            "  {0} submission(s) in the queue.".format(n),
+            "",
+            "Review it, then apply with:  apply onboard --fetch",
+        ]
+
+    a, b = prior["payload"], newest["payload"]
+    changed, lines = [], []
+    for key in sorted(set(a) | set(b)):
+        if a.get(key) == b.get(key):
+            continue
+        changed.append(key)
+        lines.append("  {0:22} {1}".format(key, _summarize(a.get(key), b.get(key))))
+
+    if not changed:
+        return [], ["Up to date — newest submission ({0}) matches what was applied.".format(when)]
+
+    lines.insert(0, "{0} submitted changes at {1} that are NOT applied locally:".format(who, when))
+    lines.append("")
+    lines.append("Review them, then apply with:  apply onboard --fetch")
+    return changed, lines
 
 
 def _write_md(path, content):
@@ -906,6 +998,10 @@ def fetch_and_save(token=None, index=None):
         report["normalized"] = norm
     except Exception as e:  # noqa: BLE001 - never block a fetch on this
         report["normalized"] = {"ok": False, "errors": [str(e)[:120]]}
+
+    # Record what was applied so `--diff` can report submission-to-submission
+    # rather than guessing from derived files.
+    _write_fetch_ledger(entry)
     return report, entry
 
 
