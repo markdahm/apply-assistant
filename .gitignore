@@ -28,6 +28,11 @@ review-app/desk-data.js
 site/desk-data.js
 site/desk.html
 site/onboard.html
+# The guided tour embeds an annotated screenshot of the candidate's live queue
+# as a data URI — real employers, real scores, their name on the resume pane.
+# The template that builds it is tracked; the built page is not.
+review-app/guide.html
+site/guide.html
 **/resume_*.pdf
 **/resume.pdf
 **/resume.html

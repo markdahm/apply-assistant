@@ -240,6 +240,7 @@
         <sc-if value="{{ hasPortal }}" hint-placeholder-val="{{ true }}">
           <a href="{{ portalHref }}" target="_blank" rel="noopener" aria-label="{{ portalLabel }}" style="flex:none;min-height:44px;display:flex;align-items:center;justify-content:center;padding:0 16px;border:1.5px solid #2F4A3C;border-radius:4px;font-weight:600;font-size:13px;color:#2F4A3C;text-decoration:none;">{{ portalLabel }}</a>
         </sc-if>
+        <a href="guide.html" target="_blank" rel="noopener" aria-label="How to use The Desk — opens the guided tour" style="flex:none;min-height:44px;display:flex;align-items:center;justify-content:center;padding:0 14px;border:1px solid #D8CFBE;border-radius:4px;font-weight:600;font-size:13px;color:#6B6258;text-decoration:none;">Help</a>
         <span onClick="{{ onToggleKeys }}" role="button" aria-label="Keyboard shortcuts" style="cursor:pointer;min-height:44px;width:40px;flex:none;display:flex;align-items:center;justify-content:center;border:1px solid #D8CFBE;border-radius:4px;font-size:14px;color:#9a9082;">?</span>
       </div>
       <sc-if value="{{ showKeys }}" hint-placeholder-val="{{ false }}"><div style="margin-top:8px;font-size:10px;color:#9a9082;">Interested <b style="color:#6B6258;font-weight:600;">I</b> · Applied <b style="color:#6B6258;font-weight:600;">A</b> · Ignored <b style="color:#6B6258;font-weight:600;">X</b> · Next <b style="color:#6B6258;font-weight:600;">J</b> · Prev <b style="color:#6B6258;font-weight:600;">K</b> · tap the active status to clear it</div></sc-if>
