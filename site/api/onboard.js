@@ -33,12 +33,18 @@ function readBody(req) {
 
 // Keep only the fields save_all() reads, so a malformed or padded post can't
 // bloat the blob. Strings are capped; `employers` is a list of {name, url}.
+//
+// THIS IS AN ALLOWLIST: a field added to the form but not added here is
+// silently dropped on the way to the blob — the form saves, the candidate's
+// answer vanishes, and nothing anywhere reports an error. If you add an input
+// to `onboard.py`, add it here in the same change.
 const TEXT_FIELDS = {
   name: 200, email: 200, phone: 60, home_location: 200, summary: 2000,
   titles: 1000, skills: 2000, years_experience: 10, seniority: 40,
   work_authorization: 300, locations: 4000, seniority_floor: 40,
   seniority_ceiling: 40, comp_floor: 20, exclude_role_keywords: 2000,
   exclude_keywords: 2000, resume: 120000, voice: 60000, experience_bank: 60000,
+  jsearch_queries: 4000,
 };
 const BOOL_FIELDS = ['remote_ok', 'needs_sponsorship'];
 

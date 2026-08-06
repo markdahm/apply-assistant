@@ -149,6 +149,18 @@ polls `api/jobs` until `letterReal` flips, ~20–40s.
 
 ## Known issues / traps
 
+- **`site/api/onboard.js` cleans submissions against an ALLOWLIST.** A field
+  added to the form in `onboard.py` but not added to `TEXT_FIELDS`/`BOOL_FIELDS`
+  is **silently dropped in transit** — the form saves, the API returns 200, and
+  the answer never reaches the blob. No error anywhere. This bit `jsearch_queries`
+  on 5 August 2026. A form field spans three places: the input, the allowlist,
+  and `save_all()`. `tests/test_payload_shape.py` now checks all three agree —
+  **run it after touching the form**:
+  ```bash
+  .venv/bin/python3 tests/test_payload_shape.py
+  ```
+  Diagnostic tell: inspect the stored payload. A key that is *absent* means the
+  server dropped it; a key that is *empty* means the candidate left it blank.
 - **The local form writes straight into `config/` and `profile/`.** Testing
   `POST /save` against a running `apply onboard` creates a real profile. It backs
   up anything it replaces to `*.bak`, but clean up test runs or a junk candidate
