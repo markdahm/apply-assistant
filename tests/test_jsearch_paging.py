@@ -98,9 +98,46 @@ def stops_when_a_page_adds_nothing_new():
 def dedupes_across_pages():
     s = Stub([[job(1), job(2)], [job(2), job(3)]], num_pages=3)
     got = s.fetch()
+    # external_id is the apply link, not job_id — see the identity test below.
     ids = sorted(j.external_id for j in got)
-    assert ids == ["id-1", "id-2", "id-3"], ids
+    assert ids == ["https://x/1", "https://x/2", "https://x/3"], ids
     return "an item on both pages is kept once"
+
+
+@case
+def identity_comes_from_the_apply_link_not_job_id():
+    """job_id is a per-response token; keying on it minted a row per sweep.
+
+    Measured 6 Aug 2026: one Grimmway posting had become 10 DB rows with 10
+    distinct job_ids and exactly 1 apply_url. Each copy was separately scored by
+    the LLM, and the survivor count read 2.6x higher than reality.
+    """
+    s = Stub([[]])
+    same_posting_twice = [
+        {"job_id": "token-A" * 50, "job_title": "QA Analyst",
+         "job_apply_link": "https://boards.example.com/jobs/123", "employer_name": "Acme"},
+        {"job_id": "token-B" * 50, "job_title": "QA Analyst",
+         "job_apply_link": "https://boards.example.com/jobs/123", "employer_name": "Acme"},
+    ]
+    uids = {s._to_job(it).uid for it in same_posting_twice}
+    assert len(uids) == 1, "two sweeps of one posting produced %d identities" % len(uids)
+
+    # A genuinely different posting must still be distinct.
+    other = dict(same_posting_twice[0], job_apply_link="https://boards.example.com/jobs/999")
+    assert s._to_job(other).uid not in uids, "distinct postings collapsed together"
+    return "stable across responses; distinct postings stay distinct"
+
+
+@case
+def in_run_dedupe_also_keys_on_apply_link():
+    # The same posting on page 1 and page 2 carries two different job_ids.
+    dup = {"job_id": "tok1", "job_title": "QA Analyst",
+           "job_apply_link": "https://x/1", "employer_name": "Acme"}
+    dup2 = dict(dup, job_id="tok2")
+    s = Stub([[dup], [dup2]], num_pages=2)
+    got = s.fetch()
+    assert len(got) == 1, "same posting kept twice across pages (%d)" % len(got)
+    return "one posting across two pages collapses to one job"
 
 
 @case

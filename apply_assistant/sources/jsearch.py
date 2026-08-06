@@ -85,7 +85,13 @@ class JSearchSource(Source):
         return Job(
             source="jsearch",
             source_company=(it.get("job_publisher") or "Google Jobs"),
-            external_id=it.get("job_id", "") or apply_url,
+            # NOT job_id. v2 returns a ~400-char opaque token that changes on
+            # every response for the same posting, so keying on it minted a new
+            # row per sweep: one Grimmway listing became 10 rows, each re-scored
+            # by the LLM, and the survivor count read 2.6x higher than reality.
+            # The apply link is stable across responses — verified 6 Aug 2026,
+            # 10 rows with 10 distinct job_ids shared exactly 1 apply_url.
+            external_id=apply_url or it.get("job_id", "") or "",
             title=_first_str(it.get("job_title")),
             company=it.get("employer_name", "") or "",
             location=loc,
@@ -140,7 +146,10 @@ class JSearchSource(Source):
             page_items, cursor = self._page(cursor)
             fresh = 0
             for it in page_items:
-                key = it.get("job_id") or it.get("job_apply_link") or str(it.get("job_title"))
+                # apply_link first, for the same reason external_id uses it:
+                # job_id is a per-response token, so the same posting appearing
+                # on page 1 and page 2 would carry two different ones.
+                key = it.get("job_apply_link") or it.get("job_id") or str(it.get("job_title"))
                 if not key or key in seen:
                     continue
                 seen.add(key)
