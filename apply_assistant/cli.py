@@ -14,6 +14,16 @@ from .sweep import load_config, run_sweep
 def cmd_sweep(args):
     print("Running sourcing sweep...\n")
     config = load_config(args.config)
+    # Say so explicitly. A mistyped filename otherwise looks identical to having
+    # no extras, and the curated employers would just quietly not be searched.
+    from .sweep import EXTRA_PATH, load_config as _lc
+    if EXTRA_PATH.exists():
+        base = _lc(args.config, extra_path=False)
+        added = sum(len(v) for k, v in config.items() if isinstance(v, list)) - sum(
+            len(v) for k, v in base.items() if isinstance(v, list))
+        print("  + {0} source(s) merged from {1}\n".format(added, EXTRA_PATH.name))
+    else:
+        print("  (no {0} — searching only the candidate's employers)\n".format(EXTRA_PATH.name))
     report = run_sweep(config=config, db_path=args.db)
     ok = [s for s in report["sources"] if s["ok"]]
     bad = [s for s in report["sources"] if not s["ok"]]

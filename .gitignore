@@ -10,6 +10,9 @@ config/profile.json
 # Holds the candidate's target employers and search terms once
 # onboarding has run — candidate data, not configuration.
 config/sources.json
+# The operator's own curated employers. Not written by onboarding, but it still
+# describes who a specific person is being searched for.
+config/sources.extra.json
 profile/*.md
 profile/raw/
 profile/samples/

@@ -1,0 +1,19 @@
+{
+  "_note": "EXAMPLE. Copy to sources.extra.json — the operator's own employers, merged into config/sources.json at sweep time. This file is NEVER written by `apply onboard --fetch`, which is the point: sources.json is rebuilt from the candidate's submission every time they edit their answers, so employers added there by hand are discarded. Add yours here instead. Entries are de-duplicated against the candidate's list, so an employer named in both is fetched once. The real sources.extra.json is gitignored.",
+
+  "_how_to_find_a_slug": "Open the employer's careers page and read it off the URL. Greenhouse: boards.greenhouse.io/SLUG or job-boards.greenhouse.io/SLUG. Lever: jobs.lever.co/SLUG. Ashby: jobs.ashbyhq.com/SLUG. Workday is 'tenant/site' from TENANT.wdN.myworkdayjobs.com/.../SITE — append @wd5 etc. if it isn't wd1. Verify before adding: a wrong slug is reported as a failed source in the sweep output, not a silent zero.",
+
+  "_reality_check": "Free ATS feeds skew heavily to tech. Probing 31 food and produce employers across Greenhouse/Lever/Ashby returned 2 live boards (5 Aug 2026). For industries that don't use these systems, firecrawl_boards scrapes any careers page — but it needs FIRECRAWL_API_KEY, costs per scrape, and roughly half of hand-listed pages are JavaScript portals that return nothing to a scraper. Verify each one.",
+
+  "greenhouse": [],
+  "lever": [],
+  "ashby": [],
+  "workable": [],
+  "smartrecruiters": [],
+  "workday": [],
+
+  "firecrawl_boards": [],
+
+  "_jsearch_note": "Queries added here are merged with the ones from the candidate's form. One query is one API request against a small monthly allowance — prefer editing the candidate's Search phrases field so the tuning stays visible to them, and use this only for phrases they shouldn't have to own.",
+  "jsearch_queries": []
+}

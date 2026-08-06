@@ -66,6 +66,25 @@ with the human** — Firecrawl is read-only and never submits an application.
   **generated** at deploy time (`apply onboard --emit-html`, called from
   `site/deploy.sh`) — never hand-edit it, and never commit it (gitignored).
   Both routes end in the same `save_all()`, so they produce identical files.
+- **Two source lists, two owners.** `config/sources.json` belongs to the
+  **candidate** — `--fetch` rebuilds it from their submission every time, so an
+  employer added there by hand survives until the next fetch and then vanishes.
+  `config/sources.extra.json` belongs to the **operator** and onboarding never
+  writes it. `load_config()` unions the two at sweep time, de-duplicating so an
+  employer named in both is fetched once; `sweep` prints how many merged, since
+  a mistyped filename otherwise looks exactly like having no extras. A malformed
+  extra file raises rather than being skipped — silently dropping every curated
+  employer is the failure mode worth being loud about. Template:
+  `config/sources.extra.example.json`. Covered by `tests/test_sources_merge.py`.
+- **Free ATS feeds are per-company, and skew to tech.** There is no "search all
+  of Greenhouse" — every employer needs its own slug, read off their careers
+  URL. Probing 31 food and produce employers across Greenhouse/Lever/Ashby on
+  5 Aug 2026 returned **2** live boards, both online grocery. For industries that
+  don't use those systems, `firecrawl_boards` scrapes any careers page (needs
+  `FIRECRAWL_API_KEY`, costs per scrape, and about half of hand-listed pages are
+  JS portals that return nothing). Worth remembering that the two best-fitting
+  employers found so far came from JSearch, which searches across employers
+  nobody named.
 - **Blob, not the Vercel CLI.** `publish.py` and `onboard.py` both talk to the
   Vercel Blob REST API directly with `BLOB_READ_WRITE_TOKEN`. That's deliberate:
   the pipeline host doesn't need the Vercel CLI at all.

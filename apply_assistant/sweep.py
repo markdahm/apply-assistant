@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import List
 
 from . import db as dbm
@@ -27,9 +28,76 @@ SOURCE_CLASSES = {
 }
 
 
-def load_config(path=None) -> dict:
+# Operator-owned additions. `config/sources.json` is rebuilt from the candidate's
+# submission on every `apply onboard --fetch`, so anything added there by hand is
+# discarded the next time they edit their answers. This file is never written by
+# onboarding — it is where Mark's own curated employers live.
+EXTRA_PATH = CONFIG_PATH.parent / "sources.extra.json"
+
+# Everything mergeable is a flat list of strings except firecrawl_boards, which
+# is a list of {url, name}.
+_URL_LIST_KEYS = ("firecrawl_boards",)
+
+
+def _norm(value) -> str:
+    return str(value or "").strip().lower().rstrip("/")
+
+
+def merge_sources(base: dict, extra: dict) -> dict:
+    """Union of the candidate's sources and the operator's, base order first.
+
+    De-duplicated so an employer named in both places is fetched once. Keys the
+    extra file doesn't mention are left alone, and `_note`-style keys are
+    ignored — they're documentation, not data.
+    """
+    out = dict(base)
+    for key, add in (extra or {}).items():
+        if key.startswith("_") or not isinstance(add, list):
+            continue
+        have = list(out.get(key) or [])
+        if key in _URL_LIST_KEYS:
+            seen = {_norm(e.get("url")) if isinstance(e, dict) else _norm(e) for e in have}
+            for e in add:
+                u = _norm(e.get("url")) if isinstance(e, dict) else _norm(e)
+                if u and u not in seen:
+                    seen.add(u)
+                    have.append(e)
+        else:
+            seen = {_norm(x) for x in have}
+            for x in add:
+                if _norm(x) and _norm(x) not in seen:
+                    seen.add(_norm(x))
+                    have.append(x)
+        out[key] = have
+    return out
+
+
+def load_config(path=None, extra_path=None) -> dict:
+    """Sources for a sweep: the candidate's list plus the operator's additions.
+
+    Pass ``extra_path=False`` to read the base file alone (tests, or debugging
+    which half contributed a source).
+    """
     with open(path or CONFIG_PATH) as f:
-        return json.load(f)
+        config = json.load(f)
+
+    if extra_path is False:
+        return config
+
+    p = Path(extra_path) if extra_path else EXTRA_PATH
+    if not p.exists():
+        return config
+
+    try:
+        extra = json.loads(p.read_text())
+    except ValueError as e:
+        # Fail loudly. Silently skipping a malformed file would drop every
+        # curated employer from the sweep and report nothing wrong.
+        raise ValueError("{0} is not valid JSON: {1}".format(p, e))
+    if not isinstance(extra, dict):
+        raise ValueError("{0} must contain a JSON object, got {1}".format(p, type(extra).__name__))
+
+    return merge_sources(config, extra)
 
 
 def build_sources(config, session):
