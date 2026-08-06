@@ -29,6 +29,9 @@ _NON_US = (
     "latvia", "lithuania", "pakistan", "bangladesh", "sri lanka", "costa rica",
 )
 _NON_US_RE = re.compile(r"\b(" + "|".join(re.escape(c) for c in _NON_US) + r")\b", re.I)
+# Shared by seniority_of() and the exclude-keyword match. "intern" is a prefix of
+# "internal" and "international"; matching it loose costs real jobs.
+_INTERN_RE = re.compile(r"\bintern(ship|ships|s)?\b", re.I)
 # "Remote - US", "Remote - USA", "United States | Remote", "Remote, US" all appear.
 _US_RE = re.compile(r"\b(u\.?s\.?a?|united states|america)\b", re.I)
 
@@ -55,9 +58,29 @@ def _remote_scope_ok(loc: str) -> bool:
     return not _NON_US_RE.search(loc)
 
 
+def keyword_hit(keyword: str, text: str) -> bool:
+    """Word-bounded keyword match.
+
+    Plain ``in`` is what filed "Internal Auditor" as an intern role and would
+    knock out "Wholesale Quality Manager" on a "sales" exclusion. Boundaries are
+    applied only where the keyword itself starts or ends with an alphanumeric,
+    so punctuated entries like ``ts/sci`` still match.
+    """
+    kw = (keyword or "").strip().lower()
+    if not kw:
+        return False
+    left = r"\b" if kw[0].isalnum() else ""
+    right = r"\b" if kw[-1].isalnum() else ""
+    return re.search(left + re.escape(kw) + right, text or "", re.I) is not None
+
+
 def seniority_of(title: str) -> str:
     t = " " + (title or "").lower() + " "
-    if "intern" in t:
+    # Word-bounded: "intern" is a prefix of "internal" and "international", so a
+    # bare substring test files "Internal Auditor" and "International Tax Lead"
+    # as internships. That matters — an ISO Internal Auditor is a real job title
+    # in quality and compliance, and it was being rejected as an intern role.
+    if _INTERN_RE.search(t):
         return "intern"
     if "vp " in t or "vice president" in t:
         return "vp"
@@ -105,7 +128,7 @@ def knockout(row, profile) -> tuple:
     reasons = []
 
     for kw in (prefs.get("exclude_role_keywords") or []):
-        if kw.lower() in tl:
+        if keyword_hit(kw, tl):
             reasons.append("excluded role: " + kw)
             break
 
@@ -130,7 +153,7 @@ def knockout(row, profile) -> tuple:
 
     blob = tl + " " + desc
     for kw in (prefs.get("exclude_keywords") or []):
-        if kw.lower() in blob:
+        if keyword_hit(kw, blob):
             reasons.append("hard exclude: " + kw)
             break
 

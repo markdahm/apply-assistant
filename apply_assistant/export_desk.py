@@ -72,12 +72,20 @@ def _pay(row):
 
 
 def _emp_type(row):
+    """Best guess at employment type from the posting text.
+
+    Word-bounded on purpose. A bare ``"intern" in blob`` labelled every posting
+    whose description said "internal audit" as an Internship — including a
+    senior food-safety auditor role paying $87-100k. Likewise "contract" has to
+    avoid "contract manufacturing", which is ordinary language in food
+    production and says nothing about how the role is employed.
+    """
     blob = ((row["title"] or "") + " " + (row["description"] or "")).lower()
-    if "part-time" in blob or "part time" in blob:
+    if re.search(r"\bpart[- ]time\b", blob):
         return "Part-time"
-    if "contract" in blob or "contractor" in blob:
+    if re.search(r"\bcontract(or|ors)?\b(?!\s+(manufactur|packer|packing|grower|farming))", blob):
         return "Contract"
-    if "intern" in blob:
+    if re.search(r"\bintern(ship|ships|s)?\b", blob):
         return "Internship"
     return "Full-time"
 
