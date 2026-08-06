@@ -84,6 +84,18 @@ def test_jsearch_queries_merge():
 
 
 @case
+def test_scalar_knobs_pass_through():
+    # jsearch_pages / jsearch_date_posted can't live in sources.json — onboarding
+    # rebuilds that file and drops them — so the operator's value has to win.
+    base = {"greenhouse": ["a"], "jsearch_pages": 2}
+    got = merge_sources(base, {"jsearch_pages": 3, "jsearch_date_posted": "month"})
+    assert got["jsearch_pages"] == 3, got
+    assert got["jsearch_date_posted"] == "month", got
+    assert got["greenhouse"] == ["a"], got
+    return "scalar tuning knobs override; lists still union"
+
+
+@case
 def test_missing_extra_file_is_fine():
     tmp = Path(tempfile.mkdtemp())
     base = tmp / "sources.json"

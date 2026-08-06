@@ -52,7 +52,13 @@ def merge_sources(base: dict, extra: dict) -> dict:
     """
     out = dict(base)
     for key, add in (extra or {}).items():
-        if key.startswith("_") or not isinstance(add, list):
+        if key.startswith("_"):
+            continue
+        if not isinstance(add, list):
+            # Scalar tuning knobs (jsearch_pages, jsearch_date_posted). These
+            # can't live in sources.json — onboarding rebuilds that file and
+            # would drop them — so the operator's value simply wins.
+            out[key] = add
             continue
         have = list(out.get(key) or [])
         if key in _URL_LIST_KEYS:
@@ -163,10 +169,15 @@ def run_sweep(config=None, db_path=None, verbose=True):
     # (same APPLY_SKIP_FIRECRAWL gate as the boards) to stay inside the quota.
     queries = [] if _os.environ.get("APPLY_SKIP_FIRECRAWL") else (config.get("jsearch_queries") or [])
     if JSearchSource.available() and queries:
+        # Tunable from sources.extra.json. Each page is one request against a
+        # small monthly allowance, so pages x queries is the real budget.
+        jl_pages = int(config.get("jsearch_pages") or 2)
+        jl_date = config.get("jsearch_date_posted", "month")
         for q in queries:
             label = "jsearch:" + q[:40]
             try:
-                jobs = JSearchSource(q, session=session).fetch()
+                jobs = JSearchSource(q, session=session,
+                                     date_posted=jl_date, num_pages=jl_pages).fetch()
                 collected.extend(jobs)
                 report["sources"].append({"source": label, "jobs": len(jobs), "ok": True})
                 if verbose:

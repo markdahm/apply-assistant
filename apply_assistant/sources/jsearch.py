@@ -50,7 +50,11 @@ class JSearchSource(Source):
     SEARCH_URL = "https://jsearch.p.rapidapi.com/search-v2"
     HOST = "jsearch.p.rapidapi.com"
 
-    def __init__(self, query, api_key=None, date_posted="week", num_pages=1, **kw):
+    # "week" was the old default and it starved the feed: it asks only for jobs
+    # posted in the last seven days, while a job board shows everything still
+    # open. Fine for the Nth recurring sweep, wrong for the first one, and the
+    # first one is what forms the impression that the engine finds nothing.
+    def __init__(self, query, api_key=None, date_posted="month", num_pages=2, **kw):
         super().__init__(**kw)
         self.query = query
         self.api_key = api_key or os.environ.get("JSEARCH_API_KEY")
@@ -96,15 +100,17 @@ class JSearchSource(Source):
             raw={"publisher": it.get("job_publisher"), "direct": it.get("job_apply_is_direct")},
         )
 
-    def fetch(self) -> List[Job]:
+    def _page(self, cursor=None):
+        """One request. Returns (raw items, next cursor)."""
+        params = {"query": self.query, "country": "us"}
+        if self.date_posted:
+            params["date_posted"] = self.date_posted
+        if cursor:
+            params["cursor"] = cursor
         resp = self.session.get(
             self.SEARCH_URL,
             headers={"X-RapidAPI-Key": self.api_key or "", "X-RapidAPI-Host": self.HOST},
-            params={
-                "query": self.query,
-                "date_posted": self.date_posted,
-                "country": "us",
-            },
+            params=params,
             timeout=40,
         )
         resp.raise_for_status()
@@ -112,5 +118,36 @@ class JSearchSource(Source):
         # /search returned {"data": [...]}. Accept either so a future shape
         # change fails loudly rather than silently yielding nothing.
         data = (resp.json() or {}).get("data") or []
-        items = data.get("jobs", []) if isinstance(data, dict) else data
+        if isinstance(data, dict):
+            return (data.get("jobs") or []), data.get("cursor")
+        return data, None
+
+    def fetch(self) -> List[Job]:
+        """Walk up to ``num_pages`` pages of results.
+
+        The v2 migration dropped the old ``page``/``num_pages`` params without
+        replacing them, so every query silently returned one page — about ten
+        results — no matter what was configured. v2 pages by opaque cursor
+        instead. Measured 5 Aug 2026: one query returned 3 results with
+        ``date_posted=week`` and 13 across two pages with no date filter.
+
+        **One page is one API request** against a small monthly allowance, so
+        this stops the moment a page yields nothing new rather than spending a
+        request to confirm what the cursor already implied.
+        """
+        items, seen, cursor = [], set(), None
+        for _ in range(max(1, int(self.num_pages or 1))):
+            page_items, cursor = self._page(cursor)
+            fresh = 0
+            for it in page_items:
+                key = it.get("job_id") or it.get("job_apply_link") or str(it.get("job_title"))
+                if not key or key in seen:
+                    continue
+                seen.add(key)
+                items.append(it)
+                fresh += 1
+            # No cursor means there is no next page. No new rows means the cursor
+            # is looping. Either way the next request would be wasted quota.
+            if not cursor or not fresh:
+                break
         return [self._to_job(it) for it in items if it.get("job_title")]

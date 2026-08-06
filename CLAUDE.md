@@ -85,6 +85,30 @@ with the human** — Firecrawl is read-only and never submits an application.
   JS portals that return nothing). Worth remembering that the two best-fitting
   employers found so far came from JSearch, which searches across employers
   nobody named.
+- **Outside tech, the aggregator IS the channel.** Checked six Salinas Valley /
+  Gilroy food employers on 5 Aug 2026: Church Brothers renders titles in HTML
+  (scrapeable), Braga Fresh renders in HTML but had no openings, **Taylor Farms
+  hosts no board at all** — its careers page links straight to LinkedIn — and
+  **ofi/Olam** runs a SuccessFactors JS app whose own search reported no
+  California openings. Produce and food-manufacturing employers mostly post to
+  Indeed / LinkedIn / ZipRecruiter, which is exactly what JSearch aggregates.
+  Build the query list, not the board list — the reverse of tech.
+- **JSearch is tuned from `sources.extra.json`, and its defaults matter enormously.**
+  `jsearch_pages` (default 2) and `jsearch_date_posted` (default `month`). Two
+  settings were starving the feed:
+  - `date_posted="week"` asks only for jobs posted in the last seven days, while
+    a job board shows everything still open. One query returned **3** results on
+    `week` and **10** with no date filter. Defensible for the Nth recurring
+    sweep, wrong for the first — and the first is what forms the impression that
+    the engine finds nothing.
+  - The `/search-v2` migration dropped `page`/`num_pages` without replacing them,
+    so every query silently returned one page regardless of config. v2 pages by
+    opaque **cursor**. Restored 5 Aug; `tests/test_jsearch_paging.py` covers the
+    stopping rules, because one page is one request.
+
+  Fixing both took the queue from 16 survivors / 1 stretch to **27 / 9**, and the
+  top score from 52 to 72. Budget is pages x queries: 8 phrases x 2 pages = 16
+  requests per sweep, roughly 12 sweeps a month on the free tier.
 - **Blob, not the Vercel CLI.** `publish.py` and `onboard.py` both talk to the
   Vercel Blob REST API directly with `BLOB_READ_WRITE_TOKEN`. That's deliberate:
   the pipeline host doesn't need the Vercel CLI at all.
