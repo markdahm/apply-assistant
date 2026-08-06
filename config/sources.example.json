@@ -1,0 +1,53 @@
+{
+  "_note": "EXAMPLE source list. Copy to sources.json and edit, or let 'apply onboard --fetch' generate one from a candidate's answers. The real sources.json is gitignored: it holds a specific person's target employers and search terms. jsearch_queries: one query is one API request, so keep the list short.",
+  "greenhouse": [
+    "figma",
+    "stripe",
+    "databricks",
+    "robinhood",
+    "gitlab",
+    "dropbox",
+    "coinbase",
+    "instacart",
+    "samsara",
+    "roku",
+    "zscaler",
+    "pinterest",
+    "lyft",
+    "airbnb",
+    "verkada",
+    "faire",
+    "chime",
+    "brex",
+    "airtable",
+    "gusto",
+    "checkr",
+    "sofi",
+    "affirm",
+    "discord",
+    "reddit",
+    "asana",
+    "nextdoor",
+    "upstart",
+    "block",
+    "anthropic"
+  ],
+  "lever": [
+    "palantir"
+  ],
+  "ashby": [
+    "openai",
+    "ramp",
+    "notion",
+    "cursor",
+    "mercor"
+  ],
+  "workable": [],
+  "smartrecruiters": [],
+  "workday": [],
+  "firecrawl_boards": [],
+  "jsearch_queries": [
+    "<job title> in <city>, <ST>",
+    "<job title> remote"
+  ]
+}

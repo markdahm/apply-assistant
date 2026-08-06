@@ -153,6 +153,88 @@ def build_sources(employers):
     return src
 
 
+def build_jsearch_queries(payload, title_limit=4, skill_limit=3, place_limit=3):
+    """Search strings for the Google-for-Jobs feed, derived from the answers.
+
+    Everything here comes from the submitted form, so re-fetching a submission
+    reproduces the same queries — these are not hand-tuned overrides that a
+    later fetch would silently discard.
+
+    Titles alone search too broadly: a food-safety candidate listing "Quality
+    Assurance Analyst" matches content moderation, IT security governance and
+    healthcare credentialing, all of which the rubric then rejects. So the
+    candidate's *distinctive* skills (HACCP, GMP, ISO 9001 — the domain words
+    a posting for their actual job would use) are paired with their strongest
+    title to anchor the search in their field.
+
+    **One query is one API request** against a ~200/month free tier, so the
+    list stays deliberately short.
+    """
+    titles = _split(payload.get("titles"))
+    if not titles:
+        return []
+
+    # Candidates list many near-identical variants ("QA Analyst", "QA
+    # Coordinator", "QA Specialist"); keep distinct-sounding ones so the
+    # queries don't all return the same postings.
+    picked = []
+    for t in titles:
+        head = " ".join(t.split()[:2]).lower()
+        if head not in [" ".join(p.split()[:2]).lower() for p in picked]:
+            picked.append(t)
+        if len(picked) >= title_limit:
+            break
+
+    # Places: home town first, then other named locations (not "remote").
+    places = []
+    home = (payload.get("home_location") or "").strip()
+    if home:
+        places.append(home)
+    for loc in _split(payload.get("locations")):
+        low = loc.lower()
+        if low in ("remote",) or any(low in p.lower() for p in places):
+            continue
+        # Skip vague regions — a search engine does nothing useful with them.
+        if low in ("bay area", "south bay", "silicon valley", "peninsula", "east bay"):
+            continue
+        places.append(loc)
+        if len(places) >= place_limit:
+            break
+
+    # Domain words: skills that read like a field, not a generic office tool.
+    generic = ("microsoft", "office", "excel", "word", "powerpoint", "outlook",
+               "google", "communication", "leadership", "teamwork", "sql",
+               "cross-functional", "data tracking", "kpi", "audits")
+    domain = []
+    for s in _split(payload.get("skills")):
+        low = s.lower().strip()
+        if len(low) < 3 or any(g in low for g in generic):
+            continue
+        domain.append(s.split(":")[0].strip())   # "ISO 9001:2015" -> "ISO 9001"
+        if len(domain) >= skill_limit:
+            break
+
+    queries = []
+    lead = picked[0] if picked else ""
+    for t in picked:
+        queries.append("{0} in {1}".format(t, places[0]) if places else t)
+    for d in domain:
+        queries.append("{0} {1} in {2}".format(d, lead, places[0]) if places else
+                       "{0} {1}".format(d, lead))
+    for place in places[1:]:
+        queries.append("{0} in {1}".format(lead, place))
+    if payload.get("remote_ok") and lead:
+        queries.append("{0} remote".format(lead))
+
+    # De-duplicate, preserve order.
+    seen, out = set(), []
+    for q in queries:
+        if q and q.lower() not in seen:
+            seen.add(q.lower())
+            out.append(q)
+    return out
+
+
 def _write_md(path, content):
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(str(path), "w") as f:
@@ -182,13 +264,25 @@ def save_all(payload):
     wrote.append(str(ppath))
 
     employers = payload.get("employers") or []
-    if employers:
+    queries = build_jsearch_queries(payload)
+    if employers or queries:
         spath = CONFIG_DIR / "sources.json"
+        # Preserve any existing employer lists when the candidate named none —
+        # a default source list beats an empty one.
+        if employers:
+            src = build_sources(employers)
+        else:
+            try:
+                src = json.loads(spath.read_text())
+            except (OSError, ValueError):
+                src = build_sources([])
+        if queries:
+            src["jsearch_queries"] = queries
         bak = _archive_existing(spath)
         if bak:
             backed_up.append(bak)
         with open(str(spath), "w") as f:
-            json.dump(build_sources(employers), f, indent=2)
+            json.dump(src, f, indent=2)
         wrote.append(str(spath))
 
     # Master profile files — the facts/voice authority for tailoring + letters.

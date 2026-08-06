@@ -7,6 +7,9 @@ data/
 
 # The real candidate profile (keep only *.example.* templates in git)
 config/profile.json
+# Holds the candidate's target employers and search terms once
+# onboarding has run — candidate data, not configuration.
+config/sources.json
 profile/*.md
 profile/raw/
 profile/samples/

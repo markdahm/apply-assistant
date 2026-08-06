@@ -16,6 +16,7 @@ and let the every-3rd-day board cadence gate how often it runs.
 
 from __future__ import annotations
 
+import json
 import os
 from typing import List
 
@@ -23,9 +24,30 @@ from ..models import Job
 from .base import Source
 
 
+def _first_str(value) -> str:
+    """Normalise job_title, which v2 returns inconsistently.
+
+    Seen in the wild: a plain string, a real list of duplicate strings, and — the
+    one that bites — a *string* holding a JSON array, e.g.
+    '["Quality Analyst","Quality Analyst"]'. Untreated that whole literal ends up
+    stored as the job title.
+    """
+    if isinstance(value, (list, tuple)):
+        return str(value[0]) if value else ""
+    s = str(value or "").strip()
+    if s.startswith('["') and s.endswith("]"):
+        try:
+            parsed = json.loads(s)
+            if isinstance(parsed, list) and parsed:
+                return str(parsed[0])
+        except ValueError:
+            pass
+    return s
+
+
 class JSearchSource(Source):
     name = "jsearch"
-    SEARCH_URL = "https://jsearch.p.rapidapi.com/search"
+    SEARCH_URL = "https://jsearch.p.rapidapi.com/search-v2"
     HOST = "jsearch.p.rapidapi.com"
 
     def __init__(self, query, api_key=None, date_posted="week", num_pages=1, **kw):
@@ -60,7 +82,7 @@ class JSearchSource(Source):
             source="jsearch",
             source_company=(it.get("job_publisher") or "Google Jobs"),
             external_id=it.get("job_id", "") or apply_url,
-            title=it.get("job_title", "") or "",
+            title=_first_str(it.get("job_title")),
             company=it.get("employer_name", "") or "",
             location=loc,
             remote=bool(it.get("job_is_remote")),
@@ -80,13 +102,15 @@ class JSearchSource(Source):
             headers={"X-RapidAPI-Key": self.api_key or "", "X-RapidAPI-Host": self.HOST},
             params={
                 "query": self.query,
-                "page": "1",
-                "num_pages": str(self.num_pages),
                 "date_posted": self.date_posted,
                 "country": "us",
             },
             timeout=40,
         )
         resp.raise_for_status()
+        # v2 returns {"data": {"jobs": [...], "cursor": "..."}}; the older
+        # /search returned {"data": [...]}. Accept either so a future shape
+        # change fails loudly rather than silently yielding nothing.
         data = (resp.json() or {}).get("data") or []
-        return [self._to_job(it) for it in data if it.get("job_title")]
+        items = data.get("jobs", []) if isinstance(data, dict) else data
+        return [self._to_job(it) for it in items if it.get("job_title")]
