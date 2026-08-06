@@ -56,6 +56,24 @@ def _split(text):
     return [p.strip() for p in parts if p.strip()]
 
 
+def _split_lines(text):
+    """One item per line, de-duplicated — for values that contain commas.
+
+    Search phrases read ``title in City, ST``, so the comma-splitting every
+    other list field uses would tear each one in half.
+    """
+    if isinstance(text, (list, tuple)):
+        items = [str(x).strip() for x in text]
+    else:
+        items = [ln.strip() for ln in str(text or "").splitlines()]
+    seen, out = set(), []
+    for it in items:
+        if it and it.lower() not in seen:
+            seen.add(it.lower())
+            out.append(it)
+    return out
+
+
 def _route_source(url):
     """Map a careers URL to (source_kind, value) so it feeds the right adapter.
 
@@ -154,7 +172,13 @@ def build_sources(employers):
 
 
 def build_jsearch_queries(payload, title_limit=4, skill_limit=3, place_limit=3):
-    """Search strings for the Google-for-Jobs feed, derived from the answers.
+    """Fallback search strings, derived from the answers when none were given.
+
+    Used only when the candidate left the *search phrases* field blank —
+    their own phrases always win, because this function knows which town they
+    live in but not which town their industry is concentrated in, and it leads
+    with the home town. For a field with a regional hub that is not home, the
+    generated set can be materially worse than three hand-written lines.
 
     Everything here comes from the submitted form, so re-fetching a submission
     reproduces the same queries — these are not hand-tuned overrides that a
@@ -264,7 +288,9 @@ def save_all(payload):
     wrote.append(str(ppath))
 
     employers = payload.get("employers") or []
-    queries = build_jsearch_queries(payload)
+    # The candidate's own phrases win. Tuning still lives in the submission, so
+    # it survives the next --fetch; the generator is only the blank-field case.
+    queries = _split_lines(payload.get("jsearch_queries")) or build_jsearch_queries(payload)
     if employers or queries:
         spath = CONFIG_DIR / "sources.json"
         # Preserve any existing employer lists when the candidate named none —
@@ -462,6 +488,11 @@ PAGE = r"""<!doctype html>
       <input type="text" name="exclude_role_keywords">
       <label>Hard dealbreakers anywhere in a posting <span class="opt">· comma-separated</span></label>
       <input type="text" name="exclude_keywords">
+
+      <label>Search phrases <span class="opt">· optional, one per line</span></label>
+      <p class="hint" style="margin:0 0 8px">Typed into the Google-for-Jobs feed exactly as written. Leave this blank and phrases get generated from your titles, skills and locations — a reasonable start, but a generated phrase leads with the town you live in, and it can't know that your industry actually concentrates somewhere else. If that's true of your field, write the phrases yourself. <strong>One phrase is one API call</strong> against a small monthly allowance, so keep it under a dozen.</p>
+      <textarea name="jsearch_queries" placeholder="operations manager in Oakland, CA&#10;supply chain analyst in Fremont, CA&#10;warehouse operations manager remote"></textarea>
+      <p class="hint" id="queriesCount"></p>
     </section>
 
     <!-- Step 3 -->
@@ -621,6 +652,20 @@ PAGE = r"""<!doctype html>
                : '✓ ' + n + ' skills');
   });
 
+  // One search phrase is one API request against a small monthly allowance, so
+  // show the count here rather than let it turn up as a spent quota.
+  var qEl = document.querySelector('[name=jsearch_queries]');
+  function queryCount(){
+    var n = qEl.value.split('\n').map(function(s){ return s.trim(); }).filter(Boolean).length;
+    document.getElementById('queriesCount').textContent = !n
+      ? 'Blank is fine — phrases get generated from your titles, skills and locations.'
+      : (n > 12
+          ? n + ' phrases — that is a lot of API calls per sweep. Trim to the ones that actually return your field.'
+          : '✓ ' + n + ' phrase(s), used exactly as written.');
+  }
+  qEl.addEventListener('input', queryCount);
+  queryCount();
+
   function validate3(){
     if (resumeEl.value.trim().length < MIN_RESUME)
       return 'Please paste your resume before continuing — every tailored line is built from it, so there is nothing to work with without it.';
@@ -676,6 +721,7 @@ PAGE = r"""<!doctype html>
     // Re-run the live counters so the ✓ hints match what was just filled in.
     nameInput.dispatchEvent(new Event('input'));
     skillsEl.dispatchEvent(new Event('input'));
+    queryCount();
     counts();
   }
 
@@ -703,6 +749,7 @@ PAGE = r"""<!doctype html>
     document.getElementById('editing').classList.add('hidden');
     nameInput.dispatchEvent(new Event('input'));
     skillsEl.dispatchEvent(new Event('input'));
+    queryCount();
     counts();
     step = 0; show();
   };
