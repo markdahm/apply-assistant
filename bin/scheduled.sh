@@ -44,6 +44,12 @@ set -a
 [ -f "$ROOT/.env" ] && . "$ROOT/.env"
 set +a
 
+# Python block-buffers stdout when it isn't a tty, so a redirected log lags far
+# behind the work and a hung step is indistinguishable from a slow one. For an
+# unattended run the log IS the only view, so pay the small cost of line
+# buffering to keep it honest.
+export PYTHONUNBUFFERED=1
+
 step() { echo; echo "--- $1 ($(date '+%H:%M:%S'))"; }
 
 # --- 1. Has the candidate changed their answers? Report, never apply. --------

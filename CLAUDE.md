@@ -124,6 +124,33 @@ with the human** — Firecrawl is read-only and never submits an application.
   is the easiest source. `save_all()` still keeps its placeholder fallbacks, since
   the local form and the API can be driven directly.
 
+## Where this project lives, and why it is not in the OS folder
+
+**Real path: `/Users/markdahm/apply-assistant`.** `~/Desktop/OS/development/apply-assistant`
+is a **symlink** to it, so the OS folder's organisation still reads normally.
+
+It was moved out of `~/Desktop` on 6 August 2026 because **macOS TCC blocks
+launchd agents from reading anything under Desktop, Documents or Downloads.**
+The scheduled run failed before it began:
+
+```
+shell-init: error retrieving current directory: getcwd: cannot access parent directories: Operation not permitted
+/bin/bash: .../bin/scheduled.sh: Operation not permitted
+```
+
+Granting Terminal Full Disk Access does not help — a launchd agent is not
+Terminal, and the process needing permission is `/bin/bash`. The alternative was
+giving `/bin/bash` blanket disk access, which is a permanent broad hole to fix a
+scheduling problem. Moving the project was the cheaper trade.
+
+**Don't move it back into Desktop.** Anything scheduled will silently stop, and
+the only evidence is `data/logs/launchd.err.log`.
+
+`PROJECT_ROOT` uses `Path(__file__).resolve()`, so it reports the real path
+whether you arrive via the symlink or not — there is no split-brain. The venv
+was rebuilt at the new location: console-script shebangs hardcode an absolute
+interpreter path and do **not** survive a move.
+
 ## Running the CLI on this Mac
 
 **`apply` collides with macOS's own `/usr/bin/apply`.** Without the virtualenv
@@ -132,7 +159,7 @@ confusing `command not found: <first argument>`. Either activate the venv, or
 call the entry point by path — which needs no activation:
 
 ```bash
-/Users/markdahm/Desktop/OS/development/apply-assistant/.venv/bin/apply <command>
+/Users/markdahm/apply-assistant/.venv/bin/apply <command>
 ```
 
 Every bare `apply …` line in the README assumes an active venv.
