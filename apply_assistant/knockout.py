@@ -7,8 +7,52 @@ and it protects the human's per-job review budget. Cheap, explainable, no API.
 
 from __future__ import annotations
 
+import re
+
 # Coarse seniority ladder, low -> high.
 SENIORITY = ["intern", "junior", "mid", "senior", "staff", "principal", "director", "vp", "exec"]
+
+# Countries seen in these feeds. COUNTRY NAMES ONLY, never city names: "Cambridge"
+# is Massachusetts as often as England and "London" is also Ontario, so matching
+# cities would silently hide real jobs. A missed non-US posting is a nuisance; a
+# wrongly rejected US one is invisible.
+_NON_US = (
+    "canada", "mexico", "united kingdom", "uk", "england", "scotland", "ireland",
+    "germany", "france", "spain", "portugal", "netherlands", "belgium", "poland",
+    "romania", "ukraine", "india", "china", "japan", "singapore", "australia",
+    "new zealand", "brazil", "argentina", "colombia", "chile", "peru", "israel",
+    "denmark", "sweden", "norway", "finland", "iceland", "switzerland", "austria",
+    "italy", "greece", "turkey", "philippines", "vietnam", "thailand", "indonesia",
+    "malaysia", "korea", "taiwan", "hong kong", "south africa", "nigeria", "kenya",
+    "egypt", "uae", "emirates", "qatar", "saudi arabia", "czechia", "czech republic",
+    "hungary", "bulgaria", "serbia", "croatia", "slovakia", "slovenia", "estonia",
+    "latvia", "lithuania", "pakistan", "bangladesh", "sri lanka", "costa rica",
+)
+_NON_US_RE = re.compile(r"\b(" + "|".join(re.escape(c) for c in _NON_US) + r")\b", re.I)
+# "Remote - US", "Remote - USA", "United States | Remote", "Remote, US" all appear.
+_US_RE = re.compile(r"\b(u\.?s\.?a?|united states|america)\b", re.I)
+
+
+def _remote_scope_ok(loc: str) -> bool:
+    """A remote role still has to be remote somewhere the candidate can work.
+
+    ``remote_ok`` used to mean anywhere on earth, which is how "Remote Poland"
+    and "Remote - India" reached a South Bay candidate's queue. A posting that
+    names a non-US country and offers no US option is rejected.
+
+    Everything else passes — a bare "Remote", an empty string, an unrecognised
+    place — because failing open on unknown data is how the rest of this filter
+    already behaves, and a wrongly rejected job is one the human never sees.
+
+    Note the US-centric assumption: this hard-codes "the candidate can work in
+    the US". That holds for every candidate so far, but it is an assumption, not
+    a derivation — the locations list holds city names with no country to read.
+    """
+    if not loc:
+        return True
+    if _US_RE.search(loc):
+        return True  # "Remote, Canada; Remote, US" — a US option is on the table
+    return not _NON_US_RE.search(loc)
 
 
 def seniority_of(title: str) -> str:
@@ -46,7 +90,7 @@ def _location_ok(row, prefs) -> bool:
     loc = (row["location"] or "").lower()
     title = (row["title"] or "").lower()
     if prefs.get("remote_ok") and (bool(row["remote"]) or "remote" in loc or "remote" in title):
-        return True
+        return _remote_scope_ok(loc)
     if not loc:
         return True  # unknown location — don't knock out on missing data
     return any(a in loc for a in allowed)
