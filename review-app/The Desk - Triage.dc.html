@@ -255,7 +255,12 @@
         <div style="font-size:12px;color:#6B6258;margin-top:20px;font-variant-numeric:tabular-nums;">{{ emptyStats }}</div>
         <div style="width:40px;height:1px;background:#D8CFBE;margin:24px 0;"></div>
         <p style="font-size:16px;line-height:1.55;color:#6B6258;max-width:40ch;margin:0;">The agent is still reading new listings. Next check around <span style="color:#221E1A;">4:00 PM</span> — you'll get a quiet notification when a fresh batch lands.</p>
-        <span onClick="{{ onRefresh }}" role="button" style="cursor:pointer;margin-top:26px;font-weight:600;font-size:14px;color:#F4EFE4;background:#2F4A3C;border-radius:4px;padding:14px 24px;min-height:50px;display:flex;align-items:center;">Check for new roles</span>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:26px;">
+          <span onClick="{{ onRefresh }}" role="button" style="cursor:pointer;font-weight:600;font-size:14px;color:#F4EFE4;background:#2F4A3C;border-radius:4px;padding:14px 24px;min-height:50px;display:flex;align-items:center;">{{ refreshLabel }}</span>
+          <!-- Without this the only way off the all-caught-up screen is to spot
+               the small ALL JOBS toggle in the header, so it reads as a dead end. -->
+          <span onClick="{{ onDismissEmpty }}" role="button" aria-label="Go back to the jobs I've already reviewed" style="cursor:pointer;font-weight:600;font-size:14px;color:#2F4A3C;background:transparent;border:1.5px solid #D8CFBE;border-radius:4px;padding:14px 24px;min-height:50px;display:flex;align-items:center;">Back to my jobs</span>
+        </div>
       </div>
     </sc-if>
 
@@ -355,7 +360,7 @@ class Component extends DCLogic {
       sort:(typeof localStorage!=='undefined'&&localStorage.getItem('desk_sort'))||'fit',
       selectedId:null,
       view:'triage',
-      stackFilter:'Pending',
+      stackFilter:'Pending', emptyDismissed:false, refreshState:'',
       curated:true,
       curated:(typeof localStorage==='undefined')||localStorage.getItem('desk_curated')!=='0',
       ledgerSort:'fit', ledgerDir:'desc',
@@ -380,11 +385,21 @@ class Component extends DCLogic {
     this._loadDynamic();
   }
 
+  // Returns a promise resolving to 'new' | 'none' | 'error'. The mount-time
+  // caller ignores it; the Check-for-new-roles button needs it, because
+  // "nothing newer on the server" and "the button is broken" look identical to
+  // the person pressing it.
   _loadDynamic(){
     try{
-      fetch('api/jobs',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(p=>{
-        if(!p||!Array.isArray(p.data)||!p.data.length) return;
-        if(p.generatedAt&&p.generatedAt<=(window.__DESK_GENERATED||0)) return;
+      // A non-OK response must surface as an error, not as "no new roles" —
+      // reporting a failed request as an empty result is the same lie this
+      // change exists to remove.
+      return fetch('api/jobs',{cache:'no-store'}).then(r=>{
+        if(!r.ok) throw new Error('api/jobs '+r.status);
+        return r.json();
+      }).then(p=>{
+        if(!p||!Array.isArray(p.data)||!p.data.length) return 'none';
+        if(p.generatedAt&&p.generatedAt<=(window.__DESK_GENERATED||0)) return 'none';
         window.__DESK_DATA=p.data;
         if(p.resume) window.__DESK_RESUME=p.resume;
         if(p.meta) window.__DESK_META=p.meta;
@@ -392,8 +407,9 @@ class Component extends DCLogic {
         this.setState({jobs:p.data});
         this._loadStatuses();
         setTimeout(()=>{ const el=document.getElementById('desk-resume-slot'); if(el){el.__mountKey=null;} this._mountResume(); },50);
-      }).catch(()=>{});
-    }catch(e){}
+        return 'new';
+      }).catch(()=>'error');
+    }catch(e){ return Promise.resolve('error'); }
   }
 
   _applyStatusMap(map){
@@ -665,7 +681,9 @@ class Component extends DCLogic {
   statusColors(){ return {Pending:'#6B6258',Interested:'#C08A2D',Applied:'#2F4A3C',Interviewing:'#B4472E',Ignored:'#9a9082','Not interested':'#9a5a44'}; }
   statusOf(id){ const js=this.jstate(id); return js.decided?js.status:'Pending'; }
   setStatus(id,status){
-    if(status==='Pending'){ this.setJ(id,{decided:false,status:null,decidedAt:null}); this._persistStatuses(); return; }
+    // Sending a job back to the queue means there is triage work again, so the
+    // all-caught-up screen should be allowed to return next time it applies.
+    if(status==='Pending'){ this.setJ(id,{decided:false,status:null,decidedAt:null}); this.setState({emptyDismissed:false}); this._persistStatuses(); return; }
     const js=this.jstate(id);
     // decidedAt anchors the follow-up clock — set when first applying, keep on later transitions
     const stamp=(status==='Applied')?(js.status==='Applied'&&js.decidedAt?js.decidedAt:Date.now()):(js.decidedAt||Date.now());
@@ -697,11 +715,11 @@ class Component extends DCLogic {
     const v={
       progressLabel: allCaught?'ALL CAUGHT UP':(this.pending().length+' OF '+total+' TO REVIEW'),
       progressPct: total?Math.round((reviewed/total)*100)+'%':'0%',
-      allCaught, hasJob:!!sel&&!allCaught,
+      allCaught, hasJob:!!sel&&(!allCaught||!!s.emptyDismissed),
     };
     // view toggle (Stack vs All-jobs ledger)
     v.isTriage=s.view==='triage'; v.isLedger=s.view==='ledger';
-    v.showEmpty=v.isTriage&&v.allCaught&&(s.stackFilter||'Pending')==='Pending';
+    v.showEmpty=v.isTriage&&v.allCaught&&(s.stackFilter||'Pending')==='Pending'&&!s.emptyDismissed; v.onDismissEmpty=()=>this.setState({emptyDismissed:true});
     v.showTriage=v.isTriage&&v.hasJob&&!v.showEmpty;
     v.showLedger=v.isLedger;
     v.onViewTriage=()=>this.setState({view:'triage'});
@@ -784,7 +802,7 @@ class Component extends DCLogic {
     const hc={Applied:'#2F4A3C',Queued:'#B4472E',Ignored:'#6B6258',Saved:'#C08A2D'};
     const _sc=(st)=>s.jobs.filter(j=>this.statusOf(j.id)===st).length;
     v.emptyStats=reviewed+' reviewed · '+_sc('Interested')+' interested · '+_sc('Applied')+' applied · '+_sc('Interviewing')+' interviewing · '+_sc('Ignored')+' ignored · '+_sc('Not interested')+' not interested';
-    v.onRefresh=()=>{};
+    v.refreshLabel={checking:'Checking…',none:'No new roles yet',error:'Check failed — try again'}[s.refreshState]||'Check for new roles'; v.onRefresh=()=>{ if(this.state.refreshState==='checking') return; this.setState({refreshState:'checking'}); Promise.resolve(this._loadDynamic()).then(r=>{ this.setState({refreshState:r||'none'}); clearTimeout(this._refreshT); this._refreshT=setTimeout(()=>this.setState({refreshState:''}),4000); }); };
 
     if(sel){
       const j=sel, js=this.jstate(j.id);
