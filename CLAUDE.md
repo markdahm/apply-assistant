@@ -124,14 +124,18 @@ with the human** — Firecrawl is read-only and never submits an application.
   is the easiest source. `save_all()` still keeps its placeholder fallbacks, since
   the local form and the API can be driven directly.
 
-## Where this project lives, and why it is not in the OS folder
+## Where this project lives
 
-**Real path: `/Users/markdahm/apply-assistant`.** `~/Desktop/OS/development/apply-assistant`
-is a **symlink** to it, so the OS folder's organisation still reads normally.
+**Real path: `/Users/markdahm/OS/development/apply-assistant`.** No symlink — the
+project sits directly in the OS folder alongside the other development projects.
+It was folded back in on 11 August 2026.
 
-It was moved out of `~/Desktop` on 6 August 2026 because **macOS TCC blocks
-launchd agents from reading anything under Desktop, Documents or Downloads.**
-The scheduled run failed before it began:
+### Why it was exiled, and why that no longer applies
+
+It lived at `/Users/markdahm/apply-assistant` from 6 August 2026 because **macOS
+TCC blocks launchd agents from reading anything under Desktop, Documents or
+Downloads**, and the OS folder was on the Desktop at the time. The scheduled run
+failed before it began:
 
 ```
 shell-init: error retrieving current directory: getcwd: cannot access parent directories: Operation not permitted
@@ -139,17 +143,39 @@ shell-init: error retrieving current directory: getcwd: cannot access parent dir
 ```
 
 Granting Terminal Full Disk Access does not help — a launchd agent is not
-Terminal, and the process needing permission is `/bin/bash`. The alternative was
-giving `/bin/bash` blanket disk access, which is a permanent broad hole to fix a
-scheduling problem. Moving the project was the cheaper trade.
+Terminal, and the process needing permission is `/bin/bash`. The whole OS folder
+then moved to `/Users/markdahm/OS` on 7 August 2026, which removed the wall, so
+the exile was no longer buying anything.
 
-**Don't move it back into Desktop.** Anything scheduled will silently stop, and
-the only evidence is `data/logs/launchd.err.log`.
+Verified on 11 August 2026 with a throwaway launchd probe agent — a real agent,
+launched by launchd, successfully `cd`'d here, read `bin/scheduled.sh`, and ran
+`.venv/bin/python3 -c 'import apply_assistant'`. Reasoning that TCC "should" be
+fine is not the same as watching launchd do it.
 
-`PROJECT_ROOT` uses `Path(__file__).resolve()`, so it reports the real path
-whether you arrive via the symlink or not — there is no split-brain. The venv
-was rebuilt at the new location: console-script shebangs hardcode an absolute
-interpreter path and do **not** survive a move.
+**`~/Desktop/OS` is a symlink to `/Users/markdahm/OS`, and that symlink is
+convenience, not a fix.** Traversing the Desktop path still touches the Desktop
+directory entry, so the launchd agent must always be pointed at the real
+`/Users/markdahm/OS/...` path. Never the Desktop one.
+
+**Don't move any of it back under Desktop.** Anything scheduled will silently
+stop, and the only evidence is `data/logs/launchd.err.log`.
+
+### If this project ever moves again
+
+`PROJECT_ROOT` uses `Path(__file__).resolve()`, and `bin/scheduled.sh` derives
+its root with `cd "$(dirname "$0")/.."`, so the *code* relocates cleanly. Two
+things do not:
+
+1. **The venv.** 38 files bake in the absolute path — every console-script
+   shebang in `.venv/bin/`, all four `activate` variants, and
+   `__editable___apply_assistant_0_1_0_finder.py`, which is what makes
+   `import apply_assistant` resolve. Either rebuild the venv or rewrite the old
+   path to the new one across those files. Then test `apply` from **outside**
+   this directory — run it from inside and the current directory shadows the
+   editable install, so a broken install still looks fine.
+2. **The launchd plist**, `~/Library/LaunchAgents/com.markdahm.apply-assistant.plist`,
+   which hardcodes the path four times: the script, the working directory, and
+   both log paths.
 
 ## Running the CLI on this Mac
 
@@ -159,10 +185,49 @@ confusing `command not found: <first argument>`. Either activate the venv, or
 call the entry point by path — which needs no activation:
 
 ```bash
-/Users/markdahm/apply-assistant/.venv/bin/apply <command>
+/Users/markdahm/OS/development/apply-assistant/.venv/bin/apply <command>
 ```
 
 Every bare `apply …` line in the README assumes an active venv.
+
+## Tests
+
+```bash
+.venv/bin/python3 -m pytest
+```
+
+That is the whole suite: **15 pytest tests covering 83 underlying checks.** Run
+it from anywhere — the bridge pins the working directory to the project root.
+
+`pytest` is in the `dev` extra and is not installed by default. If pytest is
+missing, `python3 -m unittest discover -s tests` reports `Ran 0 tests ... OK`,
+which is a pass that ran nothing:
+
+```bash
+.venv/bin/python3 -m pip install -e ".[dev]"
+```
+
+### Why there is a bridge file
+
+Only `tests/test_sources_merge.py` is written in pytest style. The other five
+are standalone scripts with their own runner and a `main()` returning 1 on
+failure, and their test functions are named for what they assert
+(`walks_two_pages_by_default`) rather than `test_*`. pytest's default
+`python_functions = test*` collects **nothing** from them.
+
+Until 11 August 2026 that meant `pytest tests/` printed **"9 passed"** and
+exited 0 while skipping 82 checks across five files. It was green, it was fast,
+and it was testing about a ninth of what it claimed. `tests/test_script_suites.py`
+now drives each script's `main()` and fails the run if any returns non-zero,
+surfacing that suite's own FAIL lines.
+
+**Adding a test file:** either name its functions `test_*` so pytest finds them
+directly, or add the module to `SCRIPT_SUITES` in `tests/test_script_suites.py`.
+`test_every_script_suite_is_registered` fails on any file that neither applies
+to, so a new suite cannot go silently uncollected again.
+
+Both harnesses still work standalone — `.venv/bin/python3 tests/test_payload_shape.py`
+runs that one file and prints its own report.
 
 ## What the resume has to contain
 

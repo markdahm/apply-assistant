@@ -24,6 +24,20 @@ apply = "apply_assistant.cli:main"
 [tool.setuptools.packages.find]
 include = ["apply_assistant*"]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Five of the six suites in tests/ are standalone scripts whose test functions
+# are not named test_*; tests/test_script_suites.py drives their main() so one
+# `pytest` run covers everything. Without it, `pytest tests/` reported
+# "9 passed" while silently skipping 82 checks.
+addopts = "-q"
+filterwarnings = [
+    # The old suites return a description string from each case instead of
+    # asserting-and-returning-None. That is their reporting style, not a bug,
+    # and the warning is noisy enough to bury real output.
+    "ignore::pytest.PytestReturnNotNoneWarning",
+]
+
 [tool.ruff]
 line-length = 110
 target-version = "py39"
