@@ -56,3 +56,9 @@ venv/
 .DS_Store
 .vscode/
 .idea/
+
+# Per-checkout identity — names the client, project, store and DB.
+CLIENT.md
+
+# Local static-preview config for checking the Desk offline.
+.claude/launch.json

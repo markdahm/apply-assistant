@@ -1,5 +1,15 @@
 # apply-assistant
 
+## Which client is this checkout?
+
+The engine runs **one candidate per checkout**, and there is now more than one.
+**Read `CLIENT.md` at this repo root before running anything.** It names the
+Vercel project, blob store, database and Desk URL for *this* checkout. It is
+untracked, so unlike this file it cannot be wrong about which one you are in.
+
+Everything below describes the engine. Where it names a specific project, store,
+URL, candidate or state, that is **client 1** — `CLIENT.md` overrides it.
+
 ## What this is
 
 A job-search engine built for **one real person at a time**. Mark built it; the

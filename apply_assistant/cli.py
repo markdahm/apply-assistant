@@ -259,7 +259,8 @@ def cmd_normalize_resume(args):
 
 def cmd_letter_worker(args):
     from .letter_worker import main as worker_main
-    worker_main(watch=args.watch, interval=args.interval)
+    worker_main(watch=args.watch, interval=args.interval,
+                idle_interval=args.idle_interval, max_idle_minutes=args.max_idle)
 
 
 def cmd_show(args):
@@ -353,7 +354,12 @@ def main(argv=None):
     s = sub.add_parser("letter-worker",
                        help="serve on-demand letter requests from The Desk's button")
     s.add_argument("--watch", action="store_true", help="poll continuously instead of one pass")
-    s.add_argument("--interval", type=int, default=20, help="seconds between polls with --watch")
+    s.add_argument("--interval", type=int, default=20,
+                   help="seconds between polls while busy (default 20)")
+    s.add_argument("--idle-interval", type=int, default=90,
+                   help="seconds between polls once idle (default 90)")
+    s.add_argument("--max-idle", type=int, default=30,
+                   help="stop after this many idle minutes; 0 to run forever (default 30)")
     s.set_defaults(func=cmd_letter_worker)
 
     s = sub.add_parser("add", help="manually add job URLs: scrape, score, tailor, letter")

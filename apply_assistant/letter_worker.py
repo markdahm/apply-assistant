@@ -84,20 +84,58 @@ def process_once(verbose=True):
     return {"served": report.get("written", 0), "failed": report.get("failed", 0)}
 
 
-def main(watch=False, interval=20):
-    """Single pass, or poll every `interval` seconds until interrupted."""
+# Seconds after the last letter during which we keep polling fast. Long
+# enough to cover a burst of clicks, short enough that walking away
+# costs little.
+_ACTIVE_WINDOW = 180
+
+
+def main(watch=False, interval=20, idle_interval=90, max_idle_minutes=30):
+    """Single pass, or poll until interrupted.
+
+    Every pass costs one Vercel Blob `list()` — a metered "simple operation" —
+    whether or not there is work. A flat 20s poll is ~4,300 list calls a day
+    doing nothing, which is what exhausted the free tier on 27 August 2026.
+
+    So the loop is adaptive rather than flat:
+
+    - `interval` (fast) while work is arriving, and for `_ACTIVE_WINDOW` seconds
+      after the last letter, so a click from The Desk is still answered quickly.
+    - `idle_interval` once nothing has happened for that long.
+    - Exit after `max_idle_minutes` of nothing at all, so a worker left running
+      overnight stops billing instead of polling until someone notices.
+
+    `max_idle_minutes=0` disables the auto-exit.
+    """
     if not watch:
         return process_once()
-    print("letter worker watching (every {0}s) — Ctrl-C to stop".format(interval))
+
+    print("letter worker watching — {0}s while busy, {1}s when idle, "
+          "exits after {2} min idle. Ctrl-C to stop.".format(
+              interval, idle_interval, max_idle_minutes or "no"))
+
+    polls = 0
+    last_work = time.time()
     try:
         while True:
             try:
-                process_once(verbose=True)
+                res = process_once(verbose=True)
+                polls += 1
+                if isinstance(res, dict) and (res.get("served") or res.get("failed")):
+                    last_work = time.time()
             except Exception as e:  # noqa: BLE001 — a bad poll must not kill the loop
+                polls += 1
                 print("letters: poll failed: {0}: {1}".format(type(e).__name__, str(e)[:120]))
-            time.sleep(interval)
+
+            idle = time.time() - last_work
+            if max_idle_minutes and idle >= max_idle_minutes * 60:
+                print("\nno requests for {0} min — stopping to stop spending blob "
+                      "operations ({1} polls this run). Restart when you next "
+                      "review.".format(max_idle_minutes, polls))
+                return
+            time.sleep(interval if idle < _ACTIVE_WINDOW else idle_interval)
     except KeyboardInterrupt:
-        print("\nstopped.")
+        print("\nstopped after {0} polls.".format(polls))
 
 
 if __name__ == "__main__":

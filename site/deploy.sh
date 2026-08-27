@@ -45,9 +45,20 @@ fi
 (cd .. && python3 -c \
   "from apply_assistant.onboard import emit_html; print('generated', emit_html('site/onboard.html'))")
 
-# Pin to the job-desk project — a stale/missing .vercel link otherwise makes
-# vercel auto-create a project named "site" (happened 2026-07-06) whose deploys
-# never reach job-desk.vercel.app and lack the DESK_PASSWORD env.
-vercel link --yes --project job-desk >/dev/null
+# Deploy to whichever project THIS checkout is linked to. The link lives in
+# site/.vercel/project.json and is per-checkout, which is what keeps two
+# clients apart — hardcoding a project name here (this line used to say
+# --project job-desk) would publish one candidate's Desk to the other's URL.
+#
+# Fail rather than let vercel auto-create: with no link it invents a project
+# named "site" (happened 2026-07-06) that has no DESK_PASSWORD, i.e. an
+# ungated Desk carrying a real person's resume.
+if [ ! -f .vercel/project.json ]; then
+  echo "ERROR: no .vercel/project.json in $(pwd)" >&2
+  echo "Run 'vercel link' here first and pick the project for THIS client." >&2
+  exit 1
+fi
+target=$(python3 -c "import json;print(json.load(open('.vercel/project.json'))['projectName'])")
+echo "deploying to project: $target"
 
 vercel deploy --prod --yes

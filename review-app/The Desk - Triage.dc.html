@@ -398,8 +398,14 @@ class Component extends DCLogic {
         if(!r.ok) throw new Error('api/jobs '+r.status);
         return r.json();
       }).then(p=>{
-        if(!p||!Array.isArray(p.data)||!p.data.length) return 'none';
-        if(p.generatedAt&&p.generatedAt<=(window.__DESK_GENERATED||0)) return 'none';
+        // A payload with no data array is NOT "nothing new" — it is the server
+        // having nothing to give us, which on a live desk means the blob store
+        // is unreachable or suspended. Reporting that as 'none' is what let a
+        // three-day-old bundle pass for current on 27 Aug 2026.
+        if(!p||!Array.isArray(p.data)){ this._liveState='nopayload'; this._updateBanner(); return 'error'; }
+        if(!p.data.length){ this._liveState='empty'; this._updateBanner(); return 'none'; }
+        this._liveState='ok';
+        if(p.generatedAt&&p.generatedAt<=(window.__DESK_GENERATED||0)){ this._updateBanner(); return 'none'; }
         window.__DESK_DATA=p.data;
         if(p.resume) window.__DESK_RESUME=p.resume;
         if(p.meta) window.__DESK_META=p.meta;
@@ -407,9 +413,63 @@ class Component extends DCLogic {
         this.setState({jobs:p.data});
         this._loadStatuses();
         setTimeout(()=>{ const el=document.getElementById('desk-resume-slot'); if(el){el.__mountKey=null;} this._mountResume(); },50);
+        this._updateBanner();
         return 'new';
-      }).catch(()=>'error');
-    }catch(e){ return Promise.resolve('error'); }
+      }).catch(()=>{ this._liveState='unreachable'; this._updateBanner(); return 'error'; });
+    }catch(e){ this._liveState='unreachable'; this._updateBanner(); return Promise.resolve('error'); }
+  }
+
+  // ---- Staleness banner ------------------------------------------------
+  // The Desk boots from a static bundle baked in at deploy time, then replaces
+  // it with live data from api/jobs. When that second step fails the page looks
+  // entirely normal while showing whatever was true on deploy day — which is
+  // what happened on 27 Aug 2026, when a suspended blob store left a three-day-
+  // old queue on screen with nothing to indicate it. This says so, in the two
+  // ways that matter: the data is old, and decisions are not reaching the
+  // server. Statuses still persist to localStorage, so they are unsynced rather
+  // than lost, and the wording has to be precise about that difference.
+  _bannerText(){
+    const st=this._liveState;
+    if(!st) return null;                       // first load hasn't settled yet
+    const gen=window.__DESK_GENERATED||0;
+    const days=gen?Math.floor((Date.now()-gen)/86400000):null;
+    const when=gen?new Date(gen).toLocaleDateString(undefined,{day:'numeric',month:'short'}):null;
+    const age=days===null?'':(days<1?' (today)':days===1?' (1 day old)':' ('+days+' days old)');
+    const parts=[];
+    if(st==='nopayload'||st==='unreachable'){
+      parts.push(when?('Can’t reach live data — showing the copy from '+when+age+'.')
+                     :'Can’t reach live data, and there is no local copy to show.');
+    } else if(st==='ok'&&days!==null&&days>=3){
+      parts.push('Live data is from '+when+age+'.');
+    }
+    if(this._statusSync===false){
+      parts.push('Decisions are saved in this browser but are not syncing to the server.');
+    }
+    return parts.length?parts.join(' '):null;
+  }
+
+  _updateBanner(){
+    if(this._bannerDismissed) return;
+    const msg=this._bannerText();
+    let el=document.getElementById('desk-stale-banner');
+    if(!msg){ if(el) el.remove(); return; }
+    if(!el){
+      el=document.createElement('div');
+      el.id='desk-stale-banner';
+      el.setAttribute('role','status');
+      el.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9999;background:#C08A2D;'+
+        'color:#221E1A;font:500 13px/1.4 system-ui,-apple-system,sans-serif;'+
+        'padding:9px 44px 9px 16px;box-shadow:0 1px 4px rgba(0,0,0,.25);';
+      const span=document.createElement('span');
+      const x=document.createElement('button');
+      x.textContent='×'; x.setAttribute('aria-label','Dismiss');
+      x.style.cssText='position:absolute;top:1px;right:8px;border:0;background:none;'+
+        'font-size:20px;line-height:1.2;cursor:pointer;color:#221E1A;';
+      x.onclick=()=>{ this._bannerDismissed=true; el.remove(); };
+      el.appendChild(span); el.appendChild(x);
+      document.body.appendChild(el);
+    }
+    el.firstChild.textContent=msg;
   }
 
   _applyStatusMap(map){
@@ -431,7 +491,11 @@ class Component extends DCLogic {
   _loadStatuses(){
     try{ const raw=localStorage.getItem('desk-status-v2'); if(raw) this._applyStatusMap(JSON.parse(raw)); }catch(e){}
     try{
-      fetch('api/status',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(map=>{ if(map) this._applyStatusMap(map); }).catch(()=>{});
+      fetch('api/status',{cache:'no-store'}).then(r=>{
+        this._statusSync = r.ok;
+        return r.ok?r.json():null;
+      }).then(map=>{ if(map) this._applyStatusMap(map); this._updateBanner(); })
+        .catch(()=>{ this._statusSync=false; this._updateBanner(); });
     }catch(e){}
   }
   _statusMap(){
@@ -619,9 +683,12 @@ class Component extends DCLogic {
   }
 
   _pollLetter(id,tries){
-    // ~2 minutes, then say so rather than spin forever — the usual cause is
-    // that the worker isn't running on the pipeline host.
-    if(tries>40){ this.setState({letterJobs:{...(this.state.letterJobs||{}),[id]:'slow'}}); return; }
+    // ~4 minutes, then say so rather than spin forever — the usual cause is
+    // that the worker isn't running on the pipeline host. Backs off after the
+      // first few tries: the worker polls every 20s while busy but drops to
+      // 90s once idle, so the window has to be wide enough for an idle worker
+      // to notice without hammering api/jobs for the whole four minutes.
+    if(tries>34){ this.setState({letterJobs:{...(this.state.letterJobs||{}),[id]:'slow'}}); return; }
     setTimeout(()=>{
       fetch('api/jobs',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(p=>{
         const hit=(p&&Array.isArray(p.data))?p.data.find(x=>x.id===id):null;
@@ -633,7 +700,7 @@ class Component extends DCLogic {
           this.setState({jobs:p.data,letterJobs:st});
         } else { this._pollLetter(id,tries+1); }
       }).catch(()=>this._pollLetter(id,tries+1));
-    },3000);
+    },tries<6?3000:8000);
   }
   resetEmail(){ const j=this.cur(); if(!j) return; this.setJ(j.id,{subject:null,body:null,bodyTouched:false,emailDesync:false}); this.flashSaved(); }
   diffSet(id,lineId,dec){ const dd={...(this.jstate(id).diff||{})}; dd[lineId]=dec; this.setJ(id,{diff:dd}); }

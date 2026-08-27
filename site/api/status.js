@@ -4,7 +4,8 @@
 // it with the client's full map (single user — last write wins). The auth
 // middleware already gates this route behind the desk cookie.
 
-const { put, list } = require('@vercel/blob');
+const { put } = require('@vercel/blob');
+const { readFixed } = require('./_blobread');
 
 const PATHNAME = 'status.json';
 const ALLOWED = new Set(['Interested', 'Applied', 'Interviewing', 'Ignored', 'Not interested']);
@@ -21,18 +22,9 @@ module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   try {
     if (req.method === 'GET') {
-      const { blobs } = await list({ prefix: PATHNAME });
-      const hit = blobs.find((b) => b.pathname === PATHNAME);
-      if (!hit) {
-        res.setHeader('Content-Type', 'application/json');
-        return res.end('{}');
-      }
-      // The store is private: a blob URL 403s without the bearer token.
-      const r = await fetch(hit.url + '?v=' + Date.now(), {
-        cache: 'no-store',
-        headers: { Authorization: 'Bearer ' + process.env.BLOB_READ_WRITE_TOKEN },
-      });
-      const text = r.ok ? await r.text() : '{}';
+      // readFixed knows this blob's URL, so the read spends no metered
+      // list() call. See api/_blobread.js.
+      const text = await readFixed(PATHNAME);
       res.setHeader('Content-Type', 'application/json');
       return res.end(text || '{}');
     }
