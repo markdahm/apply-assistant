@@ -358,8 +358,8 @@ def main(argv=None):
                    help="seconds between polls while busy (default 20)")
     s.add_argument("--idle-interval", type=int, default=90,
                    help="seconds between polls once idle (default 90)")
-    s.add_argument("--max-idle", type=int, default=30,
-                   help="stop after this many idle minutes; 0 to run forever (default 30)")
+    s.add_argument("--max-idle", type=int, default=5,
+                   help="stop after this many idle minutes; 0 to run forever (default 5)")
     s.set_defaults(func=cmd_letter_worker)
 
     s = sub.add_parser("add", help="manually add job URLs: scrape, score, tailor, letter")

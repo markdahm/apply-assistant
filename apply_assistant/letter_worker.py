@@ -90,7 +90,7 @@ def process_once(verbose=True):
 _ACTIVE_WINDOW = 180
 
 
-def main(watch=False, interval=20, idle_interval=90, max_idle_minutes=30):
+def main(watch=False, interval=20, idle_interval=90, max_idle_minutes=5):
     """Single pass, or poll until interrupted.
 
     Every pass costs one Vercel Blob `list()` — a metered "simple operation" —
@@ -104,6 +104,11 @@ def main(watch=False, interval=20, idle_interval=90, max_idle_minutes=30):
     - `idle_interval` once nothing has happened for that long.
     - Exit after `max_idle_minutes` of nothing at all, so a worker left running
       overnight stops billing instead of polling until someone notices.
+
+    The idle clock starts when the worker does, not at the first letter, so a
+    worker started before the reviewer settles in will quit on its own. At the
+    five-minute default that is a real possibility — restarting is cheap, and
+    `--max-idle 30` or `--max-idle 0` is there for a long review session.
 
     `max_idle_minutes=0` disables the auto-exit.
     """

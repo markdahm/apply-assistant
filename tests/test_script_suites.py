@@ -28,6 +28,8 @@ import os
 import pathlib
 import sys
 
+import re
+
 import pytest
 
 TESTS_DIR = pathlib.Path(__file__).resolve().parent
@@ -112,8 +114,15 @@ def test_every_script_suite_is_registered():
         for p in TESTS_DIR.glob("test_*.py")
         if p.stem not in {"test_script_suites"}
     }
-    # Anything pytest can collect natively is fine where it is.
-    pytest_native = {"test_sources_merge"}
+    # Anything pytest can collect natively is fine where it is. Detected rather than
+    # listed: a hardcoded whitelist has to be edited every time a normal pytest file
+    # is added, and the failure mode is a FALSE alarm on a file that is running
+    # perfectly well — which teaches people to ignore this check. pytest's own rule
+    # is `python_functions = test*`, so that is the rule applied here.
+    pytest_native = {
+        p.stem for p in TESTS_DIR.glob("test_*.py")
+        if re.search(r"^def test_", p.read_text(), re.M)
+    }
 
     unregistered = on_disk - set(SCRIPT_SUITES) - pytest_native
     assert not unregistered, (

@@ -206,8 +206,9 @@ Every bare `apply …` line in the README assumes an active venv.
 .venv/bin/python3 -m pytest
 ```
 
-That is the whole suite: **15 pytest tests covering 83 underlying checks.** Run
-it from anywhere — the bridge pins the working directory to the project root.
+That is the whole suite: **20 pytest tests** — five of them direct, the rest
+driving 83 underlying checks inside the older script suites. Run it from
+anywhere; the bridge pins the working directory to the project root.
 
 `pytest` is in the `dev` extra and is not installed by default. If pytest is
 missing, `python3 -m unittest discover -s tests` reports `Ran 0 tests ... OK`,
@@ -284,8 +285,18 @@ does not generate anything client-side: `site/api/letter` queues one blob under
 `letters.py` — honesty validators intact — then exports and publishes. The app
 polls `api/jobs` until `letterReal` flips, ~20–40s.
 
-- Run the worker while reviewing: `apply letter-worker --watch` (polls every 20s).
-  Nothing happens without it; after ~2 minutes the button says so.
+- Run the worker while reviewing: `apply letter-worker --watch`. Nothing happens
+  without it; after ~2 minutes the button says so.
+- **The worker is adaptive, and it stops on its own.** Every pass costs one
+  metered Vercel Blob `list()` whether or not there is work, so a flat 20s loop
+  is ~4,300 calls a day finding an empty queue — which is what suspended the
+  store on 27 August 2026. It polls every 20s while work is arriving and for
+  three minutes after, backs off to 90s when idle, and **exits after 5 idle
+  minutes**. The idle clock starts when the worker does, so starting it and then
+  not clicking anything for five minutes will end it; restarting is cheap, and
+  `--max-idle 30` or `--max-idle 0` covers a long review session.
+  `tests/test_letter_worker_idle.py` asserts the COST rather than the result,
+  because the letters served are identical whether it polls 15 times or 4,300.
 - Deliberately **not** a Vercel function calling Anthropic: that would fork the
   validators into JavaScript and put the candidate's resume, voice file, and an
   Anthropic key on Vercel. Today none of those leave this machine.
