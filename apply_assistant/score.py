@@ -12,6 +12,7 @@ Falls back to a transparent keyword heuristic when no API key is present.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -19,6 +20,23 @@ from concurrent.futures import ThreadPoolExecutor
 
 SCORE_MODEL = os.environ.get("APPLY_SCORE_MODEL", "claude-haiku-4-5")
 MAX_WORKERS = int(os.environ.get("APPLY_SCORE_WORKERS", "6"))
+
+# How much of the description the scorer reads. It was 1,400 characters, which
+# on 12 September 2026 had truncated 123 of the 135 jobs ever scored — and the
+# qualifications section, where HACCP / GMP / ISO requirements live, is what
+# gets cut. 6,000 covers the whole body of nearly every posting at a fraction
+# of a cent on Haiku; the enrichment cap is 16,000, so this is still a cap.
+DESC_CAP = int(os.environ.get("APPLY_SCORE_DESC_CAP", "6000"))
+
+
+def content_hash(row) -> str:
+    """What the scorer saw, hashed. Stored beside the score so a later run can
+    tell "already scored" from "scored on thinner text than it has now"."""
+    parts = [
+        row["title"], row["company"], row["location"],
+        row["comp_min"], row["comp_max"], (row["description"] or "")[:DESC_CAP],
+    ]
+    return hashlib.sha1("|".join(str(p or "") for p in parts).encode("utf-8")).hexdigest()[:16]
 
 SYSTEM = (
     "You are a precise job-fit scorer for ONE specific candidate. Given the "
@@ -62,7 +80,7 @@ def _job_brief(row) -> str:
     comp = ""
     if row["comp_min"] or row["comp_max"]:
         comp = " | comp {0}-{1}".format(row["comp_min"], row["comp_max"])
-    desc = (row["description"] or "")[:1400]
+    desc = (row["description"] or "")[:DESC_CAP]
     return (
         "Title: {0}\nCompany: {1}\nLocation: {2}{3}\n\n{4}".format(
             row["title"], row["company"], row["location"] or "n/a", comp, desc
@@ -133,11 +151,13 @@ def _heuristic(profile, row, note=""):
     text = ((row["title"] or "") + " " + (row["description"] or "")).lower()
     hits = [s for s in skills if s in text] if skills else []
     cov = (len(hits) / len(skills)) if skills else 0.0
-    title = (row["title"] or "").lower()
     targets = []
     if profile:
-        targets = [k.lower() for k in profile.get("preferences", {}).get("target_role_keywords", [])]
-    title_match = any(k in title for k in targets) if targets else False
+        targets = profile.get("preferences", {}).get("target_role_keywords", [])
+    # Same notion of "on target" as the knockout filter — word-bounded, folded,
+    # widened by field stems — so the fallback scorer cannot disagree with it.
+    from .knockout import title_on_target
+    title_match = title_on_target(row["title"] or "", targets) if targets else False
     score = int(min(100, cov * 70 + (25 if title_match else 0) + 5))
     tier = "strong" if score >= 70 else "stretch" if score >= 50 else "weak"
     why = "heuristic: matched {0}/{1} skills".format(len(hits), len(skills))

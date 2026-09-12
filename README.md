@@ -117,7 +117,14 @@ apply tailor                      # per-job resume, honesty-validated + cached
 apply letters                     # per-job cover letter in the candidate's voice
 apply export                      # render into the review app
 apply add <url> [<url> ...]       # hand-add a posting: scrape → score → tailor → letter
+apply prune                       # archive jobs the boards stopped listing (a flag, reversible)
+apply decisions                   # pull the Desk's decisions back into the DB; tier vs decision
 ```
+
+`match` re-scores a job whenever the text the scorer sees has changed (an
+enrichment, a re-listing), so the scheduled run is `sweep → prune → match →
+enrich → match → export → publish`: filter first, spend scrape credits only on
+survivors, then score what enrichment changed.
 
 `apply` is the console entry point (installed by `pip install -e .`); every
 command is also reachable as `python -m apply_assistant.cli <command>`.

@@ -55,7 +55,19 @@ _MATCH_COLS = [
     ("scored_at", "TEXT"),
     ("benefits", "TEXT"),
     ("manual", "INTEGER"),
+    # 12 Sep 2026 — the search fixes.
+    ("scored_hash", "TEXT"),          # content_hash() of what the scorer saw
+    ("enrich_failures", "INTEGER"),   # consecutive detail-scrape failures
+    ("enrich_last_error", "TEXT"),
+    ("archived", "INTEGER"),          # out of the funnel; see archive_stale()
+    ("decided_at", "TEXT"),           # when the candidate set `status` on the Desk
 ]
+
+# Enrichment gives up on a URL after this many consecutive failures. The same
+# dead detail pages were failing on every scheduled run — one title 18 times —
+# and each attempt spent a Firecrawl credit and a slot in the per-run cap that
+# a reachable survivor did not get.
+ENRICH_MAX_FAILURES = 3
 
 
 def _migrate(conn: sqlite3.Connection) -> None:
@@ -172,10 +184,10 @@ def save_knockout(conn, uid, knockout_flag, reasons):
     )
 
 
-def save_score(conn, uid, verdict, scored_at):
+def save_score(conn, uid, verdict, scored_at, content_hash=None):
     conn.execute(
         "UPDATE jobs SET match_score=?, match_tier=?, match_why=?, match_gaps=?, "
-        "match_method=?, scored_at=? WHERE uid=?",
+        "match_method=?, scored_at=?, scored_hash=? WHERE uid=?",
         (
             verdict.get("score"),
             verdict.get("tier"),
@@ -183,13 +195,56 @@ def save_score(conn, uid, verdict, scored_at):
             json.dumps(verdict.get("gaps") or []),
             verdict.get("method"),
             scored_at,
+            content_hash,
             uid,
         ),
     )
 
 
+def record_enrich_failure(conn, uid, error):
+    conn.execute(
+        "UPDATE jobs SET enrich_failures=COALESCE(enrich_failures,0)+1, enrich_last_error=? WHERE uid=?",
+        (truncate(str(error), 200), uid),
+    )
+
+
+def record_enrich_success(conn, uid):
+    conn.execute("UPDATE jobs SET enrich_failures=0, enrich_last_error=NULL WHERE uid=?", (uid,))
+
+
+def archive_stale(conn, days=35, dry_run=False):
+    """Take rows the boards have stopped listing out of the funnel.
+
+    "Stale" is measured from the NEWEST last_seen in the table, not from the
+    clock: a paused month must not archive the entire database the day sweeps
+    resume. Manual adds and anything the candidate has decided on are kept
+    whatever their age — a decision is a record, and a hand-added link was
+    never going to be re-seen by a sweep.
+
+    On 12 September 2026, 7,372 of 7,861 rows had not been seen since early
+    August — a tech-company sweep from a previous profile, re-knocked-out on
+    every run and inflating every count. Archiving is a flag, not a delete.
+    Returns (count, cutoff_iso).
+    """
+    newest = conn.execute("SELECT MAX(last_seen) FROM jobs").fetchone()[0]
+    if not newest:
+        return 0, None
+    from datetime import datetime, timedelta
+    cutoff = (datetime.fromisoformat(newest) - timedelta(days=days)).isoformat()
+    where = (
+        "COALESCE(archived,0)=0 AND last_seen < ? AND COALESCE(manual,0)=0 "
+        "AND COALESCE(status,'new')='new'"
+    )
+    n = conn.execute("SELECT COUNT(*) FROM jobs WHERE " + where, (cutoff,)).fetchone()[0]
+    if n and not dry_run:
+        conn.execute("UPDATE jobs SET archived=1 WHERE " + where, (cutoff,))
+        conn.commit()
+    return n, cutoff
+
+
 def shortlist(conn, tier=None, limit=30):
-    sql = "SELECT * FROM jobs WHERE COALESCE(knockout, 0)=0 AND match_score IS NOT NULL"
+    sql = ("SELECT * FROM jobs WHERE COALESCE(knockout, 0)=0 AND match_score IS NOT NULL "
+           "AND COALESCE(archived,0)=0")
     args = []
     if tier:
         sql += " AND match_tier=?"

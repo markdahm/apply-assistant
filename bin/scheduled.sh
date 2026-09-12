@@ -1,9 +1,17 @@
 #!/bin/bash
 # The unattended run. Deliberately narrower than bin/daily.sh.
 #
-# WHAT IT DOES:   check for a new submission (report only) -> sweep -> enrich
-#                 -> match -> export -> publish
+# WHAT IT DOES:   check for a new submission (report only) -> sweep -> prune
+#                 -> match -> enrich -> match -> export -> publish
 # WHAT IT WON'T:  fetch, tailor, letters, deploy.
+#
+# ORDER MATTERS. Until 12 Sep 2026 this ran enrich BEFORE match. A freshly
+# swept row has no knockout verdict yet, and the enrichment query counted that
+# as "survivor", so paid Firecrawl scrapes went to truck drivers and travel
+# nurses — 51 of the 57 jobs ever enriched were later knocked out. Now: match
+# first (filter + score the new), enrich only what passed, then match again so
+# anything enrichment gave a real description to is re-scored on it. The second
+# match is cheap: knockout is deterministic and only changed rows are scored.
 #
 # Why those four are excluded:
 #
@@ -75,10 +83,18 @@ fi
 step "sweep"
 "$PY" -m apply_assistant.cli sweep || echo "!! sweep failed"
 
-step "enrich (cap ${ENRICH_CAP:-40})"
+# Rows the boards stopped listing leave the funnel. Measured from the newest
+# sweep, not the clock, so a paused month does not archive everything at once.
+step "prune (stale after ${PRUNE_DAYS:-35} days)"
+"$PY" -m apply_assistant.cli prune --days "${PRUNE_DAYS:-35}" || echo "!! prune failed"
+
+step "match (filter + score new)"
+"$PY" -m apply_assistant.cli match || echo "!! match failed"
+
+step "enrich survivors (cap ${ENRICH_CAP:-40})"
 "$PY" -m apply_assistant.cli enrich --limit "${ENRICH_CAP:-40}" || echo "!! enrich failed"
 
-step "match"
+step "match (re-score what enrichment changed)"
 "$PY" -m apply_assistant.cli match || echo "!! match failed"
 
 step "export"

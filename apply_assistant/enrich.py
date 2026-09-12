@@ -93,12 +93,20 @@ def parse_salary(text):
 
 
 def jobs_needing_enrichment(conn, limit=None, include_shortlist_first=True):
+    # `knockout = 0`, not COALESCE(knockout,0)=0. A freshly swept row has
+    # knockout NULL — the filter has not seen it yet — and the old form counted
+    # every one of those as a survivor. With enrich running before match in the
+    # scheduled script, that spent Firecrawl credits on truck drivers and travel
+    # nurses: 51 of the 57 jobs ever enriched were later knocked out. Only rows
+    # the filter has PASSED are worth a credit.
     rows = conn.execute(
-        "SELECT * FROM jobs WHERE COALESCE(knockout,0)=0 "
+        "SELECT * FROM jobs WHERE knockout = 0 AND COALESCE(archived,0)=0 "
+        "AND COALESCE(enrich_failures,0) < ? "
         "AND (description IS NULL OR LENGTH(COALESCE(description,''))<200 "
         "     OR (comp_min IS NULL AND comp_max IS NULL AND COALESCE(comp_text,'')='') "
         "     OR (posted_at IS NULL AND match_tier IN ('strong','stretch')))"
-        "AND (url LIKE 'http%' OR apply_url LIKE 'http%')"
+        "AND (url LIKE 'http%' OR apply_url LIKE 'http%')",
+        (dbm.ENRICH_MAX_FAILURES,),
     ).fetchall()
     # shortlisted jobs first — they're what the reviewer actually sees
     rows = sorted(rows, key=lambda r: (
@@ -125,9 +133,14 @@ def run_enrich(db_path=None, limit=40, verbose=True):
         except (requests.RequestException, ValueError) as e:
             report["failed"] += 1
             report["errors"].append(r["title"][:40] + ": " + str(e)[:80])
+            # Count it. After ENRICH_MAX_FAILURES the row leaves the queue, so
+            # a dead URL stops eating the cap on every run.
+            dbm.record_enrich_failure(conn, r["uid"], e)
+            conn.commit()
             if verbose:
                 print("  --  {0}: {1}".format(r["title"][:46], str(e)[:70]))
             continue
+        dbm.record_enrich_success(conn, r["uid"])
         desc = (d.get("description") or "").strip()
         lo, hi, comp_text = parse_salary(d.get("salary"))
         benefits = (d.get("benefits") or "").strip()

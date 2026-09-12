@@ -88,7 +88,8 @@ def cmd_match(args):
     print("  profile: {0}".format(rep["profile"]))
     print("  total: {0}   knocked out: {1}   survivors: {2}".format(
         rep["total"], rep["knocked_out"], rep["survivors"]))
-    print("  scored this run: {0}".format(rep["scored"]))
+    print("  scored this run: {0}   (of which re-scored because their text changed: {1})".format(
+        rep["scored"], rep.get("rescored", 0)))
     for t in ("strong", "stretch", "weak"):
         if t in rep["by_tier"]:
             print("    {0:<8} {1}".format(t, rep["by_tier"][t]))
@@ -143,7 +144,26 @@ def cmd_enrich(args):
     for e in rep.get("errors", [])[:5]:
         print("   !! " + e)
     if rep["enriched"]:
-        print("Now re-run: match --rescore, tailor, export (descriptions changed).")
+        print("Now re-run: match, tailor, export. Match re-scores changed descriptions on its own.")
+
+
+def cmd_prune(args):
+    from . import db as dbm
+    conn = dbm.connect(args.db)
+    n, cutoff = dbm.archive_stale(conn, days=args.days, dry_run=args.dry_run)
+    live = conn.execute("SELECT COUNT(*) FROM jobs WHERE COALESCE(archived,0)=0").fetchone()[0]
+    conn.close()
+    verb = "would archive" if args.dry_run else "archived"
+    print("  {0} {1} job(s) last seen before {2}; {3} live".format(
+        verb, n, (cutoff or "n/a")[:10], live))
+    if args.dry_run and n:
+        print("  re-run without --dry-run to archive them (a flag, reversible)")
+
+
+def cmd_decisions(args):
+    from .decisions import pull_decisions
+    print("Pulling the candidate's Desk decisions into the database...\n")
+    pull_decisions(db_path=args.db)
 
 
 def cmd_add(args):
@@ -341,6 +361,15 @@ def main(argv=None):
     s = sub.add_parser("enrich", help="scrape each surviving job's detail page for description/salary/benefits")
     s.add_argument("--limit", type=int, default=40, help="max detail pages to scrape (credits)")
     s.set_defaults(func=cmd_enrich)
+
+    s = sub.add_parser("prune", help="archive jobs the boards have stopped listing (a flag, not a delete)")
+    s.add_argument("--days", type=int, default=35,
+                   help="stale = not seen for this many days before the NEWEST sweep (default 35)")
+    s.add_argument("--dry-run", action="store_true", help="count only")
+    s.set_defaults(func=cmd_prune)
+
+    s = sub.add_parser("decisions", help="pull the candidate's Desk decisions into the DB and show tier vs decision")
+    s.set_defaults(func=cmd_decisions)
 
     s = sub.add_parser("letters", help="write a cover letter for each shortlisted job (LLM, cached)")
     s.add_argument("--limit", type=int, default=None, help="cap letters this run")

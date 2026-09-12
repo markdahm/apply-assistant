@@ -208,12 +208,15 @@ def build_desk_data(db_path=None, comp_floor=None, limit=200):
     conn = dbm.connect(db_path or DEFAULT_DB)
     rows = conn.execute(
         "SELECT * FROM jobs WHERE COALESCE(knockout,0)=0 AND match_score IS NOT NULL "
+        "AND COALESCE(archived,0)=0 "
         "ORDER BY (match_tier IN ('strong','stretch')) DESC, match_score DESC, posted_at DESC LIMIT ?",
         (limit,),
     ).fetchall()
     meta = {
-        "scanned": conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0],
-        "knocked_out": conn.execute("SELECT COUNT(*) FROM jobs WHERE COALESCE(knockout,0)=1").fetchone()[0],
+        "scanned": conn.execute("SELECT COUNT(*) FROM jobs WHERE COALESCE(archived,0)=0").fetchone()[0],
+        "knocked_out": conn.execute(
+            "SELECT COUNT(*) FROM jobs WHERE COALESCE(knockout,0)=1 AND COALESCE(archived,0)=0").fetchone()[0],
+        "archived": conn.execute("SELECT COUNT(*) FROM jobs WHERE COALESCE(archived,0)=1").fetchone()[0],
         "scored": len(rows),
     }
     today = datetime.now(timezone.utc).strftime("%B %d, %Y").replace(" 0", " ")
@@ -340,28 +343,62 @@ def build_desk_data(db_path=None, comp_floor=None, limit=200):
             "attachment": "resume_" + slug + ".pdf",
             "failTest": False,
         })
-    # Fuzzy dedupe: same employer + near-identical title (county re-posts under
-    # multiple bulletin numbers). Keep the higher-scored/newer one; never drop manual.
-    import difflib
-    deduped = []
-    dropped = 0
-    for j in out:
-        dup = None
-        for k in deduped:
-            if k["company"] != j["company"]:
-                continue
-            a = re.sub(r"[^a-z0-9]", "", j["title"].lower())
-            b = re.sub(r"[^a-z0-9]", "", k["title"].lower())
-            if a == b or difflib.SequenceMatcher(None, a, b).ratio() > 0.93:
-                dup = k
-                break
-        if dup is None:
-            deduped.append(j)
-        else:
-            dropped += 1
+    deduped, dropped = dedupe_jobs(out)
     meta["deduped"] = dropped
     conn.close()
     return deduped, meta
+
+
+def _title_tokens(title):
+    from .knockout import fold
+    return set(t for t in re.split(r"[^a-z0-9&]+", fold(title)) if t and t not in _TITLE_NOISE)
+
+
+# Words that distinguish nothing about WHICH job it is. "Food Safety Manager"
+# and "Food Safety Manager - Night Shift, Salinas" are one opening listed twice.
+_TITLE_NOISE = {
+    "the", "a", "an", "of", "and", "or", "for", "in", "at", "to", "with", "ii", "iii", "i",
+    "shift", "night", "day", "swing", "full", "time", "part", "temp", "temporary", "seasonal",
+    "hourly", "salaried", "remote", "hybrid", "onsite", "on", "site", "ca", "california",
+    "usa", "us", "united", "states", "urgent", "hiring", "now", "immediate", "new",
+}
+
+
+def same_posting(a, b) -> bool:
+    """Two exported jobs that are one opening. Same employer, and either the
+    same apply URL, or titles whose meaningful words are (nearly) the same set.
+
+    The old rule was a 0.93 character-similarity ratio on the whole title,
+    which "Food Safety Manager" vs "Food Safety Manager - Salinas" fails and
+    which let SGS appear four times and GreenGate seven on the 12 Sep 2026
+    Desk. Token sets ignore the suffixes aggregators bolt on; a subset match
+    catches the "with location appended" case outright.
+    """
+    if (a.get("company") or "").strip().lower() != (b.get("company") or "").strip().lower():
+        return False
+    ua, ub = (a.get("applyUrl") or "").split("?")[0], (b.get("applyUrl") or "").split("?")[0]
+    if ua and ub and ua == ub:
+        return True
+    ta, tb = _title_tokens(a.get("title")), _title_tokens(b.get("title"))
+    if not ta or not tb:
+        return False
+    if ta <= tb or tb <= ta:
+        return True
+    return len(ta & tb) / len(ta | tb) >= 0.6
+
+
+def dedupe_jobs(jobs):
+    """Collapse duplicates in an already score-ordered list, keeping the first
+    (highest-scored) of each posting. Manual adds are never dropped. Returns
+    (kept, dropped_count)."""
+    kept = []
+    dropped = 0
+    for j in jobs:
+        if not j.get("manual") and any(same_posting(j, k) for k in kept):
+            dropped += 1
+            continue
+        kept.append(j)
+    return kept, dropped
 
 
 def write_desk_js(db_path=None, comp_floor=None):

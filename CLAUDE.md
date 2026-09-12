@@ -437,6 +437,48 @@ returns. The `apply-assistant-2` Vercel project is unused and can go.
 `load_tailored()` still keys by job id alone — safe while each checkout keeps
 its own database, which is the rule.
 
+## The search fixes — 12 September 2026
+
+A read of the real funnel (7,861 jobs, 7,823 knocked out, zero strong matches
+ever, top score 72 against a 75 threshold) showed the engine was not failing to
+RANK good jobs, it was failing to let them through. What changed, and why:
+
+- **Every knockout comparison is accent-folded and word-bounded**
+  (`knockout.fold()`, `keyword_hit()`, `title_on_target()`). "san jose" now
+  matches "San José"; 45 postings had died on that accent, three of them
+  on-target QA roles in the candidate's home city.
+- **A bare country is not a location mismatch.** "United States", "USA",
+  "Remote - United States" pass (`is_bare_us()`); 138 rows had been rejected.
+- **Target roles widen to their field stem** (`role_targets()`): a target
+  ending in a role noun with two or more words before it — "quality assurance
+  specialist" — also matches "quality assurance", because the noun is what the
+  seniority rules judge. One-word remainders never widen ("compliance analyst"
+  stays exact). Replaying the rules over the live DB: 38 survivors became 64,
+  none lost; some of the 26 are semiconductor QA the scorer will grade weak,
+  which is the division of labour — the filter admits the field, the model
+  judges the fit.
+- **Enrichment scrapes only rows the filter has PASSED** (`knockout = 0`, not
+  COALESCE), gives up on a URL after three failures (`ENRICH_MAX_FAILURES`),
+  and `bin/scheduled.sh` now runs match → enrich → match instead of enrich
+  → match. 51 of 57 enriched rows had been knocked-out jobs.
+- **Scoring is keyed on a content hash** (`score.content_hash`, stored in
+  `scored_hash`): a job is re-scored when its text changed, with no flag. The
+  description cap went from 1,400 to 6,000 characters (`APPLY_SCORE_DESC_CAP`);
+  123 of 135 scored jobs had been truncated.
+- **`apply prune`** archives rows not seen for 35 days before the NEWEST sweep
+  (a flag, `archived=1`, reversible; manual adds and decided rows are kept).
+  7,352 stale tech-profile rows were archived on 12 Sep; the pre-change DB is
+  at `data/backups/jobs-2026-09-12-pre-phase2.db`.
+- **`apply decisions`** pulls the Desk's `status.json` onto job rows (`status`,
+  `decided_at`) and prints tier vs decision — the feedback loop that had never
+  been closed.
+- **Desk dedupe** collapses same-employer postings whose title token sets are
+  nested or ≥0.6 Jaccard, or that share an apply URL (`export_desk.same_posting`).
+
+Tests: `tests/test_search_fixes.py`, each case named for the row or count it
+fixes. Not done, deliberately: a commute-radius rule (needs geodata), and more
+JSearch queries (the candidate owns that list; the quota has headroom).
+
 ## Open threads (21 August 2026)
 
 **The candidate's submission is the source of truth — never hand-edit the derived
@@ -495,9 +537,10 @@ works via `/search-v2`. The most productive single query is the one naming the
 industry's regional hub rather than the candidate's home town. Re-sweep weekly;
 boards turn over completely.
 
-**Knocked-out rows keep stale scores.** `match --rescore` only rescores
-survivors, so filtered jobs retain whatever tier they last had — including from
-a previous candidate. Always filter `knockout=0` when querying the DB by hand.
+**Knocked-out rows keep stale scores.** Scoring only touches survivors, so
+filtered jobs retain whatever tier they last had — including from a previous
+candidate. Always filter `knockout=0 AND COALESCE(archived,0)=0` when querying
+the DB by hand.
 
 ## Considered and deferred
 
