@@ -433,7 +433,8 @@ could be verified by pull-and-compare.
 
 Known gaps: `review-app/guide.html` is not shipped (it embeds one candidate's
 queue); `bin/build_guide.py` needs a sample-data mode before the Help tour
-returns. The `apply-assistant-2` Vercel project is unused and can go.
+returns. The `apply-assistant-2` Vercel project and the empty blob store that
+had been attached to it were both deleted 12 Sep 2026.
 `load_tailored()` still keys by job id alone — safe while each checkout keeps
 its own database, which is the rule.
 
