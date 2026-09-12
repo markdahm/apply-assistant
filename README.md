@@ -90,8 +90,9 @@ files in [`profile/`](profile/README.md) yourself.
 
 **When the candidate isn't at your keyboard.** The local form only listens on
 localhost, so for someone remote the same form is deployed with the review app
-at `/onboard`, behind the Desk's password. They fill it in on their own time;
-their answers park in Vercel Blob; you pull them down when they're ready:
+at `/onboard`, behind the Desk's Google sign-in. They fill it in on their own
+time; their answers park in Vercel Blob under their own prefix; you pull them
+down when they're ready:
 
 ```bash
 apply onboard --check             # who's submitted, and when
@@ -102,8 +103,9 @@ apply onboard --fetch             # newest submission -> the same local files
 produce byte-identical output (and the same `*.bak` protection). The hosted page
 is *generated* from the same template at deploy time — `site/deploy.sh` bakes it
 via `apply onboard --emit-html` — so the two forms cannot drift apart. Pulling
-needs `BLOB_READ_WRITE_TOKEN`; it reads Blob directly, so no Vercel CLI on the
-pipeline host. Then:
+needs `BLOB_READ_WRITE_TOKEN` and `CANDIDATE_EMAIL` (the address the candidate
+signs in with — it selects their prefix in the shared store); it reads Blob
+directly, so no Vercel CLI on the pipeline host. Then:
 
 ```bash
 apply sweep                       # pull every source into the DB
@@ -147,16 +149,25 @@ resume (rendered to look like the real PDF, with the changed lines highlighted),
 and sets a status — **Interested / Applied / Interviewing / Ignored / Not
 interested** — or opens the employer portal.
 
-[`site/`](site/) deploys it (Vercel) behind a password, with a mobile companion
-at `/m` and serverless functions for:
+[`site/`](site/) deploys it (Vercel) behind **Google sign-in**, with a mobile
+companion at `/m`. One deployment serves several candidates: a roster in two
+environment variables (`DESK_OPERATORS`, `DESK_CANDIDATES`) says who may sign in
+and in what role, every blob lives under a per-candidate prefix derived from the
+signed-in address, and an operator picks whose Desk to view from the masthead.
+The sign-in is hand-rolled (two Google endpoints, PKCE, an HMAC-signed session
+cookie that carries the address so the roster is re-checked on every request)
+and tested without a network in [`site/tests/`](site/tests/). Serverless
+functions:
 
+- `api/auth/google`, `api/auth/callback/google`, `api/auth/signout` — the sign-in
+- `api/me` — who is signed in; operators switch candidates here
 - `api/status` — persist the reviewer's decisions/edits (Vercel Blob)
 - `api/pdf` — render edited resume/letter HTML to a one-page PDF (headless Chromium)
 - `api/inbox` — queue manually-added job links (one blob per link, no lost updates)
 - `api/jobs` — serve the freshest published dataset so new jobs appear without a redeploy
 - `api/onboard` — accept a remote candidate's onboarding answers (one blob per
-  submission; the blob carries real personal data, so it gets an unguessable
-  suffix and the page sits behind the password gate)
+  submission under the signed-in candidate's prefix; the blob carries real
+  personal data, so the store is private and the URL gets an unguessable suffix)
 
 `apply export` writes the data the app reads; `apply publish` (or the daily job)
 pushes it live.

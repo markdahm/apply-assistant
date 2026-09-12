@@ -33,13 +33,13 @@
 <div id="desk-root" style="height:100vh;display:flex;flex-direction:column;background:#F4EFE4;background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22120%22 height=%22120%22><filter id=%22n%22><feTurbulence type=%22fractalNoise%22 baseFrequency=%220.9%22 numOctaves=%222%22 stitchTiles=%22stitch%22/><feColorMatrix type=%22saturate%22 values=%220%22/></filter><rect width=%22120%22 height=%22120%22 filter=%22url(%23n)%22 opacity=%220.04%22/></svg>');color:#221E1A;font-family:'Hanken Grotesk',sans-serif;overflow:hidden;">
 
   <!-- MASTHEAD -->
-  <div style="flex:none;border-bottom:1px solid #D8CFBE;background:rgba(244,239,228,0.95);">
+  <div id="desk-masthead" style="flex:none;border-bottom:1px solid #D8CFBE;background:rgba(244,239,228,0.95);">
     <div style="padding:11px 22px 10px;display:flex;align-items:center;justify-content:space-between;gap:16px;">
       <div style="display:flex;align-items:baseline;gap:8px;">
         <span style="font-weight:600;font-size:20px;letter-spacing:-0.02em;line-height:1;">The Desk</span>
         <span aria-hidden="true" style="width:6px;height:6px;border-radius:50%;background:#B4472E;display:inline-block;transform:translateY(-1px);"></span>
       </div>
-      <div style="display:flex;align-items:center;gap:14px;">
+      <div id="desk-masthead-right" style="display:flex;align-items:center;gap:14px;">
         <span onClick="{{ onAddOpen }}" role="button" aria-label="Add a job listing" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#2F4A3C;border:1px solid #b6c3b3;border-radius:4px;padding:6px 11px;"><span aria-hidden="true" style="font-size:14px;line-height:1;">+</span> Add</span>
         <div style="display:flex;font-size:10px;letter-spacing:0.06em;text-transform:uppercase;border:1px solid #D8CFBE;border-radius:4px;overflow:hidden;">
           <span onClick="{{ onViewTriage }}" role="button" aria-label="Stack view" style="cursor:pointer;padding:6px 10px;background:{{ triageTabBg }};color:{{ triageTabColor }};">Stack</span>
@@ -240,7 +240,7 @@
         <sc-if value="{{ hasPortal }}" hint-placeholder-val="{{ true }}">
           <a href="{{ portalHref }}" target="_blank" rel="noopener" aria-label="{{ portalLabel }}" style="flex:none;min-height:44px;display:flex;align-items:center;justify-content:center;padding:0 16px;border:1.5px solid #2F4A3C;border-radius:4px;font-weight:600;font-size:13px;color:#2F4A3C;text-decoration:none;">{{ portalLabel }}</a>
         </sc-if>
-        <a href="guide.html" target="_blank" rel="noopener" aria-label="How to use The Desk — opens the guided tour" style="flex:none;min-height:44px;display:flex;align-items:center;justify-content:center;padding:0 14px;border:1px solid #D8CFBE;border-radius:4px;font-weight:600;font-size:13px;color:#6B6258;text-decoration:none;">Help</a>
+        <a id="desk-help" href="guide.html" target="_blank" rel="noopener" aria-label="How to use The Desk — opens the guided tour" style="flex:none;min-height:44px;display:flex;align-items:center;justify-content:center;padding:0 14px;border:1px solid #D8CFBE;border-radius:4px;font-weight:600;font-size:13px;color:#6B6258;text-decoration:none;">Help</a>
         <span onClick="{{ onToggleKeys }}" role="button" aria-label="Keyboard shortcuts" style="cursor:pointer;min-height:44px;width:40px;flex:none;display:flex;align-items:center;justify-content:center;border:1px solid #D8CFBE;border-radius:4px;font-size:14px;color:#9a9082;">?</span>
       </div>
       <sc-if value="{{ showKeys }}" hint-placeholder-val="{{ false }}"><div style="margin-top:8px;font-size:10px;color:#9a9082;">Interested <b style="color:#6B6258;font-weight:600;">I</b> · Applied <b style="color:#6B6258;font-weight:600;">A</b> · Ignored <b style="color:#6B6258;font-weight:600;">X</b> · Next <b style="color:#6B6258;font-weight:600;">J</b> · Prev <b style="color:#6B6258;font-weight:600;">K</b> · tap the active status to clear it</div></sc-if>
@@ -381,8 +381,67 @@ class Component extends DCLogic {
     this._key=(e)=>this.onKey(e);
     window.addEventListener('keydown',this._key);
     this._mountResume();
-    this._loadStatuses();
-    this._loadDynamic();
+    // Identity first: it decides which localStorage bucket holds this
+    // candidate's decisions, and whether an operator has picked anyone yet.
+    // If api/me cannot be reached the load goes ahead anyway — the staleness
+    // banner already reports an unreachable server, and a network blip must
+    // not turn into a blank Desk.
+    this._loadMe().then(me=>{
+      if(me&&me.role==='operator'&&!me.candidate){ this._liveState='nocandidate'; this._updateBanner(); return; }
+      this._loadStatuses();
+      this._loadDynamic();
+    });
+  }
+
+  // ---- Who is signed in ----------------------------------------------
+  // GET api/me → { email, role, candidate, candidates? }. A 401 means the
+  // session is gone (expired, or the address was taken off the roster), so
+  // go straight back to the sign-in page rather than rendering a Desk that
+  // every later call will refuse.
+  _loadMe(){
+    return fetch('api/me',{cache:'no-store'}).then(r=>{
+      if(r.status===401){ location.href='/login?next='+encodeURIComponent(location.pathname+location.search); return null; }
+      return r.ok?r.json():null;
+    }).then(me=>{ this._me=me||null; this._renderIdentity(); return me; })
+      .catch(()=>{ this._me=null; this._renderIdentity(); return null; });
+  }
+  // Decisions are cached per CANDIDATE, not per browser. An operator switching
+  // between candidates on one machine must not carry one person's Interested
+  // list into another's queue — and must not POST it into their status.json.
+  _statusKey(){ return 'desk-status-v2'+(this._me&&this._me.candidate?':'+this._me.candidate.id:''); }
+  _renderIdentity(){
+    const host=document.getElementById('desk-masthead-right'); if(!host) return;
+    let el=document.getElementById('desk-identity');
+    if(!el){
+      el=document.createElement('span'); el.id='desk-identity';
+      el.style.cssText='display:inline-flex;align-items:center;gap:8px;font-size:11px;color:#6B6258;';
+      host.appendChild(el);
+    }
+    el.textContent='';
+    const me=this._me; if(!me) return;
+    const who=document.createElement('span'); who.textContent=me.email; who.title='Signed in as '+me.email; el.appendChild(who);
+    if(me.role==='operator'&&Array.isArray(me.candidates)){
+      // Operators pick whose Desk this is. The server honours the choice only
+      // for ids on the roster, so this menu is convenience, not the control.
+      const sel=document.createElement('select'); sel.setAttribute('aria-label','Whose Desk to show');
+      sel.style.cssText='font:inherit;font-size:11px;color:#221E1A;background:#FBF8F1;border:1px solid #D8CFBE;border-radius:4px;padding:4px 6px;max-width:220px;';
+      const o0=document.createElement('option'); o0.value=''; o0.textContent=me.candidate?'Switch candidate…':'Pick a candidate…'; sel.appendChild(o0);
+      for(const c of me.candidates){ const o=document.createElement('option'); o.value=c.id; o.textContent=c.email; if(me.candidate&&me.candidate.id===c.id) o.selected=true; sel.appendChild(o); }
+      if(!me.candidates.length){ const o=document.createElement('option'); o.disabled=true; o.textContent='No candidates on the roster yet'; sel.appendChild(o); }
+      sel.onchange=()=>{ const as=sel.value; if(!as) return;
+        fetch('api/me',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({as})})
+          .then(r=>{ if(r.ok) location.reload(); }).catch(()=>{}); };
+      el.appendChild(sel);
+    }
+    const out=document.createElement('span'); out.textContent='Sign out'; out.setAttribute('role','button'); out.tabIndex=0;
+    out.style.cssText='cursor:pointer;text-transform:uppercase;letter-spacing:0.08em;border:1px solid #D8CFBE;border-radius:4px;padding:5px 9px;';
+    out.onclick=()=>{ fetch('api/auth/signout',{method:'POST'}).catch(()=>{}).then(()=>{ location.href='/login'; }); };
+    el.appendChild(out);
+    // The guided tour is not deployed until it can be built without one
+    // candidate's real queue in the screenshot; hide the button rather than
+    // link to a 404.
+    const help=document.getElementById('desk-help');
+    if(help&&!this._helpChecked){ this._helpChecked=true; fetch('guide.html',{method:'HEAD'}).then(r=>{ if(!r.ok) help.style.display='none'; }).catch(()=>{}); }
   }
 
   // Returns a promise resolving to 'new' | 'none' | 'error'. The mount-time
@@ -436,6 +495,11 @@ class Component extends DCLogic {
     const when=gen?new Date(gen).toLocaleDateString(undefined,{day:'numeric',month:'short'}):null;
     const age=days===null?'':(days<1?' (today)':days===1?' (1 day old)':' ('+days+' days old)');
     const parts=[];
+    if(st==='nocandidate'){
+      // An operator with nothing selected. Said plainly, because the empty
+      // queue underneath reads as "all caught up" otherwise.
+      return 'No candidate selected — pick one from the menu at the top right to load their Desk.';
+    }
     if(st==='nopayload'||st==='unreachable'){
       parts.push(when?('Can’t reach live data — showing the copy from '+when+age+'.')
                      :'Can’t reach live data, and there is no local copy to show.');
@@ -457,7 +521,11 @@ class Component extends DCLogic {
       el=document.createElement('div');
       el.id='desk-stale-banner';
       el.setAttribute('role','status');
-      el.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9999;background:#C08A2D;'+
+      // Below the masthead, not over it: the "no candidate" message points at
+      // the picker in the masthead, which a banner at top:0 would cover.
+      const mast=document.getElementById('desk-masthead');
+      const top=mast?mast.getBoundingClientRect().bottom:0;
+      el.style.cssText='position:fixed;top:'+top+'px;left:0;right:0;z-index:9999;background:#C08A2D;'+
         'color:#221E1A;font:500 13px/1.4 system-ui,-apple-system,sans-serif;'+
         'padding:9px 44px 9px 16px;box-shadow:0 1px 4px rgba(0,0,0,.25);';
       const span=document.createElement('span');
@@ -489,7 +557,7 @@ class Component extends DCLogic {
     });
   }
   _loadStatuses(){
-    try{ const raw=localStorage.getItem('desk-status-v2'); if(raw) this._applyStatusMap(JSON.parse(raw)); }catch(e){}
+    try{ const raw=localStorage.getItem(this._statusKey()); if(raw) this._applyStatusMap(JSON.parse(raw)); }catch(e){}
     try{
       fetch('api/status',{cache:'no-store'}).then(r=>{
         this._statusSync = r.ok;
@@ -514,7 +582,7 @@ class Component extends DCLogic {
     clearTimeout(this._pt);
     this._pt=setTimeout(()=>{
       const map=this._statusMap();
-      try{ localStorage.setItem('desk-status-v2',JSON.stringify(map)); }catch(e){}
+      try{ localStorage.setItem(this._statusKey(),JSON.stringify(map)); }catch(e){}
       try{ fetch('api/status',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(map)}).catch(()=>{}); }catch(e){}
     },350);
   }
@@ -579,13 +647,17 @@ class Component extends DCLogic {
     const j=this.cur(); if(!j) return;
     const name=this.pdfFileName(j);
     const before=this.state.showBefore&&!!j.resumeHtml;
-    const src=(!before&&j.pdfFile&&j.pdfFile.length)?j.pdfFile:'resume.pdf';
-    const openFallback=()=>{ try{window.open(src,'_blank');}catch(e){} };
-    const prebuilt=()=>{ fetch(src).then(r=>{ if(!r.ok) throw new Error(String(r.status)); return r.blob(); }).then(b=>{
+    // Prebuilt PDFs are no longer deployed (a static file would be served to
+    // every candidate), so the normal path is api/pdf rendering this job's
+    // cleanHtml. The prebuilt fetch survives for a local preview that has them.
+    const src=(!before&&j.pdfFile&&j.pdfFile.length)?j.pdfFile:null;
+    const openFallback=()=>{ if(src){ try{window.open(src,'_blank');}catch(e){} } };
+    const viaApi=()=>{ if(!before&&j.cleanHtml){ this._pdfViaApi(j.cleanHtml,name,openFallback); } else { openFallback(); } };
+    const prebuilt=()=>{ if(!src) return viaApi(); fetch(src).then(r=>{ if(!r.ok) throw new Error(String(r.status)); return r.blob(); }).then(b=>{
       const u=URL.createObjectURL(b); const a=document.createElement('a');
       a.href=u; a.download=name; document.body.appendChild(a); a.click();
       setTimeout(()=>{URL.revokeObjectURL(u); a.remove();},800);
-    }).catch(()=>{ if(!before&&j.cleanHtml){ this._pdfViaApi(j.cleanHtml,name,openFallback); } else { openFallback(); } }); };
+    }).catch(viaApi); };
     const js=this.jstate(j.id);
     if(!before&&js.resumeHtml){
       // his custom edits — render them fresh so the PDF matches what he sees
@@ -987,9 +1059,14 @@ class Component extends DCLogic {
   }
 
 
-  realOrSeed(){ return (typeof window!=='undefined'&&window.__DESK_DATA&&window.__DESK_DATA.length) ? window.__DESK_DATA : this.seedJobs(); }
+  // Sample jobs appear ONLY when desk-data.js is absent or null — the design
+  // preview. Any array, including an empty one, means a real deployment whose
+  // data arrives from api/jobs; showing a fictional queue there would put made-
+  // up employers in front of a real candidate while theirs loads (or never does).
+  _isReal(){ return typeof window!=='undefined'&&Array.isArray(window.__DESK_DATA); }
+  realOrSeed(){ return this._isReal() ? window.__DESK_DATA : this.seedJobs(); }
   seedHistory(){
-    if(typeof window!=='undefined'&&window.__DESK_DATA&&window.__DESK_DATA.length) return [];
+    if(this._isReal()) return [];
     const D=86400000, now=Date.now();
     return [
       {id:'h1',title:'Staff Frontend Engineer',company:'Lumen',status:'Applied',decidedAt:now-9*D},

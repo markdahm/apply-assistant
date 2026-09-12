@@ -1,0 +1,18 @@
+# The Desk serves SEVERAL candidates from one deployment, so nothing that
+# belongs to one candidate may ship as a static file — a static file is served
+# to everyone who can sign in. Each candidate's data comes from api/jobs under
+# their own blob prefix, and PDFs render on demand from api/pdf.
+#
+# `apply export` still writes these into site/ (export_desk.py) for the local
+# preview; this file keeps them out of the upload.
+resume*.pdf
+resume_*.pdf
+resume.html
+base_resume.pdf
+# The guided tour embeds an annotated screenshot of ONE candidate's real queue.
+# Until bin/build_guide.py can build it from sample data, it does not ship.
+guide.html
+# Local only.
+.env*
+tests/
+node_modules/

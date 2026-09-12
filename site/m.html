@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
 <title>The Desk</title>
-<script src="./desk-data.js"></script>
 <style>
   :root {
     --paper:#f7f3ec; --card:#fffdf8; --ink:#1e1b16; --muted:#8a8377;
@@ -21,6 +20,9 @@
   header { padding:22px 18px 12px; text-align:center; }
   header h1 { font-family:Georgia,serif; font-size:26px; }
   header .sub { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.16em; margin-top:4px; }
+  header .who { color:var(--muted); font-size:12px; margin-top:8px; display:flex; justify-content:center; gap:10px; align-items:center; flex-wrap:wrap; }
+  header .who select { font:inherit; font-size:12px; border:1px solid var(--rule); border-radius:6px; padding:3px 6px; background:var(--card); color:var(--ink); max-width:70vw; }
+  header .who .out { border:1px solid var(--rule); border-radius:999px; padding:3px 10px; cursor:pointer; color:var(--ink); background:var(--card); }
 
   .tabs { display:flex; gap:6px; padding:10px 14px; position:sticky; top:0; overflow-x:auto; -webkit-overflow-scrolling:touch;
           background:linear-gradient(var(--paper) 85%, transparent); z-index:5; }
@@ -92,6 +94,7 @@
 <header>
   <h1>The Desk</h1>
   <div class="sub">Job queue · mobile</div>
+  <div class="who" id="who"></div>
 </header>
 
 <div class="tabs" id="tabs"></div>
@@ -108,17 +111,13 @@
 <div class="toast" id="toast"></div>
 
 <script>
-  var DATA = (window.__DESK_DATA || []).slice();
+  // Everything is per candidate and comes from the API: who is signed in
+  // (api/me), their jobs (api/jobs), their decisions (api/status). Nothing is
+  // baked into the page, because one deployment serves several people.
+  var DATA = [];
+  var ME = null;
   var LS_KEY = 'desk-status-v2';
   var statuses = {};  // { id: { status, decidedAt } }
-  try {
-    statuses = JSON.parse(localStorage.getItem(LS_KEY) || 'null')
-      || JSON.parse(localStorage.getItem('desk-status-v1') || '{}');
-  } catch (e) {}
-  // migrate v1 string values to v2 objects
-  Object.keys(statuses).forEach(function (k) {
-    if (typeof statuses[k] === 'string') statuses[k] = { status: statuses[k] };
-  });
 
   var TABS = [
     { id: 'queue',          label: 'Queue' },
@@ -134,15 +133,6 @@
     var st = statuses[k] && statuses[k].status;
     if (MIGRATE[st]) statuses[k].status = MIGRATE[st];
   });
-  // remote statuses win over local cache
-  try {
-    fetch('api/status', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (map) {
-        if (!map) return;
-        Object.keys(map).forEach(function (k) { statuses[k] = map[k]; });
-        save(); render();
-      }).catch(function () {});
-  } catch (e) {}
   var tab = 'queue';
   var current = null;
 
@@ -272,7 +262,7 @@
 
     h += '<div class="linkrow">';
     if (j.url) h += '<a class="btn primary" target="_blank" rel="noopener" href="' + esc(j.url) + '">Open posting ↗</a>';
-    h += '<a class="btn" href="' + esc(j.pdfFile || 'resume.pdf') + '" download="' + esc(pdfName(j)) + '">Resume PDF ↓</a>';
+    if (j.cleanHtml) h += '<div class="btn" onclick="downloadResume()">Resume PDF ↓</div>';
     h += '<div class="btn" onclick="copyLetter()">Copy letter</div>';
     if (j.emailTo) {
       h += '<a class="btn" target="_blank" rel="noopener" href="' + esc(gmailLink(j)) + '">Email via Gmail</a>';
@@ -339,14 +329,91 @@
 
   function render() { renderTabs(); renderList(); }
 
-  if (!DATA.length) {
-    document.getElementById('list').innerHTML =
-      '<div class="empty">No jobs exported yet — run a sweep + match, then <code>cli export</code>.</div>';
-    renderTabs();
-  } else {
-    DATA.sort(function (a, b) { return b.score - a.score; });
-    render();
+  // PDFs render on demand from this job's clean resume HTML — no static file
+  // is deployed, since a static file would be served to every candidate.
+  function downloadResume() {
+    if (!current || !current.cleanHtml) return;
+    var name = pdfName(current);
+    toast('Building PDF…');
+    fetch('api/pdf', { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ html: current.cleanHtml }) })
+      .then(function (r) { if (!r.ok || (r.headers.get('content-type') || '').indexOf('pdf') < 0) throw new Error('no pdf'); return r.blob(); })
+      .then(function (b) {
+        var u = URL.createObjectURL(b); var a = document.createElement('a');
+        a.href = u; a.download = name; document.body.appendChild(a); a.click();
+        setTimeout(function () { URL.revokeObjectURL(u); a.remove(); }, 800);
+      })
+      .catch(function () { toast('PDF failed — try again'); });
   }
+
+  function renderWho() {
+    var el = document.getElementById('who');
+    if (!ME) { el.innerHTML = ''; return; }
+    var h = '<span>' + esc(ME.email) + '</span>';
+    if (ME.role === 'operator' && Array.isArray(ME.candidates)) {
+      h += '<select id="as" aria-label="Whose Desk to show"><option value="">'
+        + (ME.candidate ? 'Switch candidate…' : 'Pick a candidate…') + '</option>'
+        + ME.candidates.map(function (c) {
+            return '<option value="' + esc(c.id) + '"' + (ME.candidate && ME.candidate.id === c.id ? ' selected' : '') + '>' + esc(c.email) + '</option>';
+          }).join('') + '</select>';
+    }
+    h += '<span class="out" onclick="signOut()">Sign out</span>';
+    el.innerHTML = h;
+    var sel = document.getElementById('as');
+    if (sel) sel.onchange = function () {
+      if (!sel.value) return;
+      fetch('api/me', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ as: sel.value }) })
+        .then(function (r) { if (r.ok) location.reload(); });
+    };
+  }
+  function signOut() {
+    fetch('api/auth/signout', { method: 'POST' }).catch(function () {}).then(function () { location.href = '/login'; });
+  }
+
+  function empty(msg) {
+    document.getElementById('list').innerHTML = '<div class="empty">' + msg + '</div>';
+    renderTabs();
+  }
+
+  function boot() {
+    fetch('api/me', { cache: 'no-store' }).then(function (r) {
+      if (r.status === 401) { location.href = '/login?next=' + encodeURIComponent(location.pathname); return null; }
+      return r.ok ? r.json() : null;
+    }).then(function (me) {
+      ME = me || null;
+      renderWho();
+      if (ME && ME.role === 'operator' && !ME.candidate) {
+        empty('No candidate selected — pick one above.');
+        return;
+      }
+      // Decisions cached per CANDIDATE, so an operator switching people on one
+      // phone never carries one person's list into another's queue.
+      if (ME && ME.candidate) LS_KEY = 'desk-status-v2:' + ME.candidate.id;
+      try { statuses = JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch (e) { statuses = {}; }
+      Object.keys(statuses).forEach(function (k) {
+        if (typeof statuses[k] === 'string') statuses[k] = { status: statuses[k] };
+        var st = statuses[k] && statuses[k].status;
+        if (MIGRATE[st]) statuses[k].status = MIGRATE[st];
+      });
+      return Promise.all([
+        fetch('api/jobs', { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error('api/jobs ' + r.status); return r.json(); }),
+        fetch('api/status', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
+      ]).then(function (res) {
+        var p = res[0], map = res[1];
+        // A payload with no data array is the server having nothing to give
+        // us — say so, rather than rendering it as an empty queue.
+        if (!p || !Array.isArray(p.data)) { empty('Can’t reach live data right now. Pull down to try again.'); return; }
+        if (map) Object.keys(map).forEach(function (k) { statuses[k] = map[k]; });
+        DATA = p.data.slice();
+        if (!DATA.length) { empty('No jobs yet — they land here after the first sweep.'); return; }
+        DATA.sort(function (a, b) { return b.score - a.score; });
+        render();
+      });
+    }).catch(function () {
+      empty('Can’t reach live data right now. Pull down to try again.');
+    });
+  }
+  boot();
 </script>
 </body>
 </html>

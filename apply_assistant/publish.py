@@ -1,9 +1,11 @@
-"""Publish the freshest desk data to Vercel Blob (desk-data-live.json).
+"""Publish the freshest desk data to Vercel Blob (c/<id>/desk-data-live.json).
 
 The site's api/jobs.js serves this to the app at boot — so inbox-processed
-jobs and daily-sweep results go live WITHOUT a Vercel deploy (the mini has no
-vercel CLI). Static deploys still ship the app shell + prebuilt PDFs; jobs
-with no prebuilt PDF download via api/pdf.js from their cleanHtml.
+jobs and daily-sweep results go live WITHOUT a Vercel deploy. Deploys ship only
+the app shell; every PDF renders on demand via api/pdf.js from cleanHtml.
+
+Every pathname is under THIS checkout's candidate prefix — see tenant.py. The
+store is shared by every candidate, so a bare pathname would be a collision.
 """
 
 from __future__ import annotations
@@ -12,8 +14,15 @@ import json
 import os
 import time
 
+from .tenant import blob_prefix
+
 BLOB_API = "https://blob.vercel-storage.com"
 PATHNAME = "desk-data-live.json"
+
+
+def live_pathname() -> str:
+    """Where this candidate's live dataset lives in the shared store."""
+    return blob_prefix() + PATHNAME
 
 
 def _blob_token():
@@ -43,10 +52,11 @@ def publish_live(db_path=None, verbose=True):
     token = _blob_token()
     if not token:
         raise RuntimeError("no BLOB_READ_WRITE_TOKEN (set BLOB_READ_WRITE_TOKEN)")
+    pathname = live_pathname()   # raises before any work if the candidate is unset
     payload = build_live_payload(db_path=db_path)
     body = json.dumps(payload, ensure_ascii=False).encode()
     resp = requests.put(
-        BLOB_API + "/" + PATHNAME,
+        BLOB_API + "/" + pathname,
         headers={
             "Authorization": "Bearer " + token,
             "x-api-version": "7",
@@ -65,12 +75,13 @@ def publish_live(db_path=None, verbose=True):
         raise RuntimeError("blob put failed: {0} {1}".format(resp.status_code, resp.text[:160]))
     if verbose:
         print("  published {0} jobs ({1} KB) -> {2}".format(
-            len(payload["data"]), len(body) // 1024, PATHNAME))
+            len(payload["data"]), len(body) // 1024, pathname))
     return len(payload["data"])
 
 
 def read_queue(prefix, token=None, skip_ids=None, required_field=None):
-    """List one-blob-per-item queue entries under `prefix`.
+    """List one-blob-per-item queue entries under `prefix`, within this
+    candidate's blob prefix.
 
     Fetches bodies only for ids not already in `skip_ids` — the worker's
     processed ledger. `required_field` drops malformed entries missing a key
@@ -83,7 +94,7 @@ def read_queue(prefix, token=None, skip_ids=None, required_field=None):
     if not token:
         raise RuntimeError("no BLOB_READ_WRITE_TOKEN")
     skip = skip_ids or set()
-    r = requests.get(BLOB_API, params={"prefix": prefix, "limit": "500"},
+    r = requests.get(BLOB_API, params={"prefix": blob_prefix() + prefix, "limit": "500"},
                      headers={"Authorization": "Bearer " + token}, timeout=30)
     r.raise_for_status()
     entries = []

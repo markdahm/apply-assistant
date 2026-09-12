@@ -951,11 +951,15 @@ def read_submissions(token=None):
 
     from .publish import BLOB_API, _blob_token
 
+    from .tenant import blob_prefix
+
     token = token or _blob_token()
     if not token:
         raise RuntimeError(
             "no BLOB_READ_WRITE_TOKEN — set it in .env to pull remote submissions")
-    r = requests.get(BLOB_API, params={"prefix": BLOB_PREFIX, "limit": "100"},
+    # Only THIS candidate's submissions: the store is shared, and the Desk
+    # files each person's answers under their own prefix.
+    r = requests.get(BLOB_API, params={"prefix": blob_prefix() + BLOB_PREFIX, "limit": "100"},
                      headers={"Authorization": "Bearer " + token}, timeout=30)
     r.raise_for_status()
     out = []

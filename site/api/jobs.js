@@ -1,20 +1,24 @@
-// Dynamic desk data. The worker on the pipeline host publishes the freshest
-// export to Blob (desk-data-live.json) after processing letter requests or
-// daily sweeps — the app fetches this at boot and uses it when newer than the
-// static bundle.
+// Dynamic desk data for ONE candidate. The pipeline on Mark's machine publishes
+// the freshest export to Blob under that candidate's prefix
+// (c/<id>/desk-data-live.json) after processing letter requests or a sweep —
+// the app fetches this at boot.
 //
-// Reads go through readFixed(), which knows this blob's URL and therefore
-// spends no metered list() call. See api/_blobread.js.
+// Which candidate is decided by the signed-in identity (api/_who.js), never by
+// a parameter. Reads go through readFixed(), which knows the blob's URL and
+// therefore spends no metered list() call. See api/_blobread.js.
 
 const { readFixed } = require('./_blobread');
+const { requireCandidate } = require('./_who');
 
-const PATHNAME = 'desk-data-live.json';
+const NAME = 'desk-data-live.json';
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
+  const c = await requireCandidate(req, res);
+  if (!c) return;
   res.setHeader('Content-Type', 'application/json');
   try {
-    const text = await readFixed(PATHNAME);
+    const text = await readFixed(c.path(NAME));
     return res.end(text || '{}');
   } catch (e) {
     // Generic to the client, specific to the log — the log is the only

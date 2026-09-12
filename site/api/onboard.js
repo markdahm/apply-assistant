@@ -1,11 +1,18 @@
-// Remote onboarding intake. The candidate fills in /onboard (behind the same
-// password gate as the rest of the Desk) and their answers land here as ONE
-// blob per submission — same shape as api/inbox.js, and for the same reason:
-// no read-modify-write, so nothing can be lost to a concurrent write.
+// Remote onboarding intake. The candidate signs in with Google, fills in
+// /onboard, and their answers land here as ONE blob per submission under THEIR
+// prefix — c/<id>/onboard/<n>.json. Same shape as api/inbox.js, and for the
+// same reason: no read-modify-write, so nothing can be lost to a concurrent
+// write.
 //
-// `apply onboard --fetch` on the pipeline host lists the onboard/ prefix with
-// BLOB_READ_WRITE_TOKEN, takes the newest, and writes config/profile.json and
-// the profile/*.md files through the same save_all() the local form uses.
+// WHICH candidate a submission belongs to is decided by who signed in (or, for
+// an operator, which candidate they have picked) — never by the email typed
+// into the form. The typed address still goes on the resume's contact line;
+// identity comes from the session.
+//
+// `apply onboard --fetch` on the pipeline host lists that same prefix with
+// BLOB_READ_WRITE_TOKEN (its .env names the candidate), takes the newest, and
+// writes config/profile.json and the profile/*.md files through the same
+// save_all() the local form uses.
 //
 // This body holds real personal data (resume, contact details, comp floor). The
 // store is configured PRIVATE, so the blob URL 403s without a bearer token — an
@@ -13,6 +20,7 @@
 // stays as a second layer, and the page itself is gated by middleware.js.
 
 const { put, list } = require('@vercel/blob');
+const { requireCandidate } = require('./_who');
 
 const MAX_BODY = 400000; // a pasted resume + writing sample, with headroom
 
@@ -68,15 +76,16 @@ function clean(body) {
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
+  const c = await requireCandidate(req, res);
+  if (!c) return;
   res.setHeader('Content-Type', 'application/json');
   try {
     // Default: metadata only, never the submitted personal data.
     // ?include=payload returns the newest submission so the form can pre-fill
     // and the candidate can refine their answers instead of retyping them.
-    // Safe behind middleware.js — and the Desk already displays this person's
-    // resume to anyone holding the password.
+    // Only THIS candidate's submissions are listed — the prefix is theirs.
     if (req.method === 'GET') {
-      const { blobs } = await list({ prefix: 'onboard/', limit: 100 });
+      const { blobs } = await list({ prefix: c.path('onboard/'), limit: 100 });
       const out = {
         count: blobs.length,
         latest: blobs.length
@@ -124,8 +133,10 @@ module.exports = async (req, res) => {
         return res.end('{"error":"a name is required"}');
       }
       const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-      await put('onboard/' + id + '.json', JSON.stringify({
-        id, submittedAt: Date.now(), payload,
+      // `account` records who was signed in when this was submitted — the
+      // candidate themselves, or the operator filling it in on their behalf.
+      await put(c.path('onboard/' + id + '.json'), JSON.stringify({
+        id, submittedAt: Date.now(), account: c.who.email, candidate: c.who.candidate.email, payload,
       }), {
         access: 'private', addRandomSuffix: true, contentType: 'application/json',
       });

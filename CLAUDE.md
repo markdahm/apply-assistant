@@ -2,13 +2,40 @@
 
 ## Which client is this checkout?
 
-The engine runs **one candidate per checkout**, and there is now more than one.
+The engine runs **one candidate per checkout**, and there is more than one.
 **Read `CLIENT.md` at this repo root before running anything.** It names the
-Vercel project, blob store, database and Desk URL for *this* checkout. It is
-untracked, so unlike this file it cannot be wrong about which one you are in.
+candidate, their `CANDIDATE_EMAIL`, the database and the Desk URL for *this*
+checkout. It is untracked, so unlike this file it cannot be wrong about which
+one you are in.
 
-Everything below describes the engine. Where it names a specific project, store,
-URL, candidate or state, that is **client 1** — `CLIENT.md` overrides it.
+**Since 12 September 2026 there is ONE Desk for every candidate.** One Vercel
+project (`job-desk`), one private blob store, Google sign-in, and every blob
+under a per-candidate prefix `c/<id>/` where `id = sha256(email)[:16]`. A
+checkout no longer owns a project or a store; it owns a database, a profile,
+and a `CANDIDATE_EMAIL` in `.env` that puts its publishes and fetches under the
+right prefix (`apply_assistant/tenant.py`). The Desk derives the same id from
+whoever signed in (`site/api/_lib/roster.mjs`); `tests/test_candidate_id.py`
+drives both implementations and fails if they ever disagree.
+
+Everything below describes the engine. Where it names a specific candidate or
+state, that is **client 1** — `CLIENT.md` overrides it.
+
+## Who can sign in, and what they see
+
+- **`DESK_OPERATORS`** (Vercel env) — Mark. Sees every candidate on the roster,
+  picks one from a menu in the masthead; the pick is a `desk_as` cookie the
+  server honours only for roster ids.
+- **`DESK_CANDIDATES`** (Vercel env) — the candidates, by Google address. Each
+  sees only their own Desk. A forged `desk_as` is ignored for a candidate.
+- Anyone on neither list is refused at the callback and again on every request:
+  the address rides inside the signed session cookie, and the roster is re-read
+  per request, so removing an address locks that person out immediately.
+- An empty roster, a missing secret, or a missing client id **closes** the door.
+- `api/me` reports who is signed in; every data function (`jobs`, `status`,
+  `inbox`, `letter`, `onboard`) starts with `requireCandidate()` and answers
+  401 (no session) or 409 (operator with nobody picked) before touching a blob.
+- Onboarding files a submission under the SIGNED-IN candidate's prefix. The
+  typed email goes on the resume; identity comes from the session.
 
 ## What this is
 
@@ -25,13 +52,26 @@ with the human** — Firecrawl is read-only and never submits an application.
 
 ## Live deployment
 
-- **URL:** https://job-desk-theta.vercel.app (password-gated; `/onboard` is the
+- **URL:** https://job-desk-theta.vercel.app (Google sign-in; `/onboard` is the
   candidate form). Project `job-desk` under scope `mark-dahms-projects`,
-  `prj_xqB6zvQBUrD68ohGy6pm5HXutRcF`.
-- **Deploys are CLI-only — do NOT connect Git.** `site/onboard.html`,
-  `site/desk.html` and `site/desk-data.js` are all gitignored generated files, so
-  a Git-based build would ship a site with no onboarding form and no Desk.
-  `./deploy.sh` generates them and uploads from the local machine.
+  `prj_xqB6zvQBUrD68ohGy6pm5HXutRcF`. **Serves every candidate.**
+- **Env vars the site reads:** `DESK_GOOGLE_CLIENT_ID` (not secret — it travels
+  in the browser's URL bar), `DESK_GOOGLE_CLIENT_SECRET` (Sensitive),
+  `DESK_SESSION_SECRET` (Sensitive, any long random string), `DESK_OPERATORS`,
+  `DESK_CANDIDATES`, plus `BLOB_READ_WRITE_TOKEN` and `BLOB_STORE_ID`.
+  `DESK_PASSWORD` is retired and unread. The OAuth client's redirect URI is
+  `https://job-desk-theta.vercel.app/api/auth/callback/google` (derived from the
+  request origin, so a localhost URI can be registered alongside).
+- **Deploys are CLI-only — do NOT connect Git.** `site/onboard.html` and
+  `site/desk.html` are gitignored generated files, so a Git-based build would
+  ship a site with no onboarding form and no Desk. `./deploy.sh` generates them,
+  runs the site tests, and uploads from the local machine.
+- **Nothing candidate-specific ships as a static file.** `deploy.sh` always
+  writes an EMPTY `desk-data.js`, and `site/.vercelignore` keeps the exported
+  PDFs, `resume.html` and the screenshot-bearing `guide.html` out of the upload.
+  A static file is served to everyone who can sign in; each person's data comes
+  from `api/jobs` under their own prefix and PDFs render on demand via `api/pdf`.
+  The Help button hides itself when `guide.html` is absent.
 - **The blob store is PRIVATE** (`store_GyHmheg9ri8M3dBT`). That means:
   `access: 'private'` on every write, `@vercel/blob` **2.x** (0.27 predates
   private stores), and `Authorization: Bearer <token>` on every blob *read* —
@@ -206,9 +246,17 @@ Every bare `apply …` line in the README assumes an active venv.
 .venv/bin/python3 -m pytest
 ```
 
-That is the whole suite: **20 pytest tests** — five of them direct, the rest
-driving 83 underlying checks inside the older script suites. Run it from
-anywhere; the bridge pins the working directory to the project root.
+That is the whole suite. It runs the Python tests, drives the older script
+suites through their own `main()`, and — via `tests/test_site_js.py` — runs
+the Desk's five JavaScript suites in `site/tests/*.test.mjs` with `node --test`
+(74 tests: session signing, Google sign-in and PKCE, the roster, the gate's
+`decide()` with real cookies, and every API handler driven end to end with
+`@vercel/blob` and `fetch` stubbed, including a full start → callback sign-in).
+The bridge asserts the pass COUNT as well as the exit code, because
+`node --test` exits 0 on zero files. `tests/test_candidate_id.py` runs the real
+`roster.mjs` through node and compares ids with `tenant.py`. Run it from
+anywhere; the bridges pin their working directories. `cd site && npm test` runs
+the JavaScript half alone.
 
 `pytest` is in the `dev` extra and is not installed by default. If pytest is
 missing, `python3 -m unittest discover -s tests` reports `Ran 0 tests ... OK`,
@@ -262,9 +310,9 @@ it just makes a thin resume visible before it costs a failed tailoring run.
 
 A returning candidate sees their previous answers pre-filled and edits them,
 rather than retyping everything. `GET /api/onboard?include=payload` returns the
-newest submission (password-gated, same as the rest of the site) and the hosted
-form populates itself; a banner says what they're editing, with a "Start over
-instead" escape.
+newest submission under the signed-in candidate's prefix — never anyone else's —
+and the hosted form populates itself; a banner says what they're editing, with a
+"Start over instead" escape.
 
 **The blob is the record of what the candidate said; everything local is
 derived from it.** `--fetch` takes the newest submission and overwrites
@@ -281,7 +329,8 @@ periodically.
 
 The Desk has a **"Write this one ✍"** button on any job without a letter. It
 does not generate anything client-side: `site/api/letter` queues one blob under
-`letter-requests/`, and `apply letter-worker` on this machine runs the real
+the candidate's `c/<id>/letter-requests/`, and `apply letter-worker` on this
+machine (whose `.env` names that candidate) runs the real
 `letters.py` — honesty validators intact — then exports and publishes. The app
 polls `api/jobs` until `letterReal` flips, ~20–40s.
 
@@ -328,8 +377,8 @@ polls `api/jobs` until `letterReal` flips, ~20–40s.
   candidate data is gitignored (`config/profile.json`, `profile/*.md`) — keep it
   that way.
 - **A submission holds real personal data** (resume, contact, comp floor)
-  in Mark's Vercel Blob. Unguessable URL, password-gated page — but it is his
-  data on Mark's infrastructure, and he should know that.
+  in Mark's Vercel Blob. Private store, Google sign-in, per-candidate prefix —
+  but it is their data on Mark's infrastructure, and they should know that.
 - **The template persona is gone — keep it that way.** `letters.py`,
   `export_desk.py`, `resume_doc.py`, and `tailor.py` all hardcoded a fictional
   candidate ("Jordan Rivers"): the letter signature, the resume title, the voice
@@ -347,6 +396,46 @@ polls `api/jobs` until `letterReal` flips, ~20–40s.
   said "Mark", so letters signed "Mark". Use a full name.
 - **Single-writer SQLite.** One host owns `jobs.db`. Never put it on a sync
   drive; two writers through a sync layer corrupt it silently.
+
+## The multi-candidate Desk — live since 12 September 2026
+
+Deployed and proven the same day: Mark signed in with his operator Gmail,
+picked the candidate slot, and saw client 1's queue. The actual addresses
+live in each checkout's untracked `CLIENT.md` — this repo is public, and a
+candidate's or operator's address does not belong in it. What is in place:
+
+- **Google Cloud:** OAuth client "The Desk" in the Solis project, client id
+  `982261074519-s9ogtdfsrd0gafehtjep0uv1pc4l0noo.apps.googleusercontent.com`,
+  redirect URI `https://job-desk-theta.vercel.app/api/auth/callback/google`.
+  The consent screen's test-user list (if still in Testing mode) must carry
+  every address on the roster.
+- **Vercel env on `job-desk`:** `DESK_GOOGLE_CLIENT_ID`, `DESK_OPERATORS`
+  (Mark's Gmail), `DESK_CANDIDATES` (client 1's slot, see `CLIENT.md`) as
+  plain variables so they can be read back and compared;
+  `DESK_GOOGLE_CLIENT_SECRET` and `DESK_SESSION_SECRET` Sensitive.
+  `DESK_PASSWORD` removed. **A variable change needs a redeploy** to reach the
+  functions — `cd site && ./deploy.sh`.
+- **Blobs:** copied 12 Sep under `c/04c243ca9efab57f/` (the stand-in address),
+  8 blobs, verified identical. The flat copies at the store root are the
+  rollback; nothing reads them.
+- **The candidate slot is a stand-in.** Client 1's Google address was unknown
+  on 12 Sep, so one of Mark's own addresses holds the slot (named in
+  `CLIENT.md`). When the real address is known: add it to `DESK_CANDIDATES`,
+  redeploy, run `bin/migrate_blobs.py --email <theirs> --apply`, and change
+  `CANDIDATE_EMAIL` in this checkout's `.env`.
+
+Two traps met on the way, both in this file's family: the first client secret
+Mark stored was rejected by Google (`invalid_client`) — the callback's log line
+named it in one read, because the token endpoint's body is logged verbatim —
+and the Vercel project stores NEW variables as Sensitive by default, so the
+three plain ones had to be re-added with `--no-sensitive` before their values
+could be verified by pull-and-compare.
+
+Known gaps: `review-app/guide.html` is not shipped (it embeds one candidate's
+queue); `bin/build_guide.py` needs a sample-data mode before the Help tour
+returns. The `apply-assistant-2` Vercel project is unused and can go.
+`load_tailored()` still keys by job id alone — safe while each checkout keeps
+its own database, which is the rule.
 
 ## Open threads (21 August 2026)
 

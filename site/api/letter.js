@@ -1,7 +1,8 @@
 // On-demand cover letters. The Desk's "write this one" button posts a job uid
-// here; each request becomes its OWN blob under letter-requests/ (same reason
-// as api/inbox: blob overwrites propagate slowly and a shared array does
-// read-modify-write, which drops concurrent clicks).
+// here; each request becomes its OWN blob under this candidate's prefix,
+// c/<id>/letter-requests/ (same reason as api/inbox: blob overwrites propagate
+// slowly and a shared array does read-modify-write, which drops concurrent
+// clicks).
 //
 // Nothing is generated here. The worker on the pipeline host claims the
 // request and runs the real letters.py, which carries the honesty validators
@@ -14,6 +15,7 @@
 // "still working" apart from "the worker isn't running".
 
 const { put, list } = require('@vercel/blob');
+const { requireCandidate } = require('./_who');
 
 const MAX_BODY = 8000;
 
@@ -34,10 +36,12 @@ function readBody(req) {
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
+  const c = await requireCandidate(req, res);
+  if (!c) return;
   res.setHeader('Content-Type', 'application/json');
   try {
     if (req.method === 'GET') {
-      const { blobs } = await list({ prefix: 'letter-requests/', limit: 200 });
+      const { blobs } = await list({ prefix: c.path('letter-requests/'), limit: 200 });
       return res.end(JSON.stringify({
         pending: blobs.length,
         oldest: blobs.length
@@ -61,7 +65,7 @@ module.exports = async (req, res) => {
         return res.end('{"error":"a valid job uid is required"}');
       }
       const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-      await put('letter-requests/' + id + '.json', JSON.stringify({
+      await put(c.path('letter-requests/' + id + '.json'), JSON.stringify({
         id, uid, requestedAt: Date.now(),
       }), {
         access: 'private', addRandomSuffix: false, contentType: 'application/json',
@@ -79,5 +83,4 @@ module.exports = async (req, res) => {
   }
 };
 
-// Exported for the local round-trip test.
 module.exports.MAX_BODY = MAX_BODY;
