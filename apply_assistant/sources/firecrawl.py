@@ -65,7 +65,8 @@ class FirecrawlSource(Source):
         return bool(os.environ.get("FIRECRAWL_API_KEY"))
 
     def fetch(self) -> List[Job]:
-        resp = self.session.post(
+        from ..usage import http_call
+        resp = http_call("firecrawl", "scrape_board", lambda: self.session.post(
             self.SCRAPE_URL,
             headers={
                 "Authorization": "Bearer " + (self.api_key or ""),
@@ -73,7 +74,7 @@ class FirecrawlSource(Source):
             },
             json={"url": self.url, "formats": [{"type": "json", "schema": JOB_SCHEMA}]},
             timeout=120,
-        )
+        ), url=self.url, board=self.board_name)
         resp.raise_for_status()
         payload = resp.json()
         items = (((payload.get("data") or {}).get("json") or {}).get("jobs")) or []

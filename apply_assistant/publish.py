@@ -52,10 +52,12 @@ def publish_live(db_path=None, verbose=True):
     token = _blob_token()
     if not token:
         raise RuntimeError("no BLOB_READ_WRITE_TOKEN (set BLOB_READ_WRITE_TOKEN)")
+    from .usage import http_call, publish_usage, stage
+
     pathname = live_pathname()   # raises before any work if the candidate is unset
     payload = build_live_payload(db_path=db_path)
     body = json.dumps(payload, ensure_ascii=False).encode()
-    resp = requests.put(
+    resp = http_call("blob", "put", lambda: requests.put(
         BLOB_API + "/" + pathname,
         headers={
             "Authorization": "Bearer " + token,
@@ -70,12 +72,16 @@ def publish_live(db_path=None, verbose=True):
         },
         data=body,
         timeout=60,
-    )
+    ), pathname=pathname)
     if resp.status_code >= 300:
         raise RuntimeError("blob put failed: {0} {1}".format(resp.status_code, resp.text[:160]))
     if verbose:
         print("  published {0} jobs ({1} KB) -> {2}".format(
             len(payload["data"]), len(body) // 1024, pathname))
+    stage("publish", jobs=len(payload["data"]), kb=len(body) // 1024)
+    # The usage rollup rides along with every data publish. Best effort: a
+    # failure here is printed and does not fail the publish.
+    publish_usage(token=token, verbose=verbose)
     return len(payload["data"])
 
 
@@ -93,9 +99,15 @@ def read_queue(prefix, token=None, skip_ids=None, required_field=None):
     token = token or _blob_token()
     if not token:
         raise RuntimeError("no BLOB_READ_WRITE_TOKEN")
+    from .usage import http_call
+
     skip = skip_ids or set()
-    r = requests.get(BLOB_API, params={"prefix": blob_prefix() + prefix, "limit": "500"},
-                     headers={"Authorization": "Bearer " + token}, timeout=30)
+    full_prefix = blob_prefix() + prefix
+    # list() is a metered operation; the body downloads below are not, but are
+    # counted too so a runaway poll shows up on the ops page as traffic.
+    r = http_call("blob", "list", lambda: requests.get(
+        BLOB_API, params={"prefix": full_prefix, "limit": "500"},
+        headers={"Authorization": "Bearer " + token}, timeout=30), prefix=full_prefix)
     r.raise_for_status()
     entries = []
     for b in r.json().get("blobs", []):
@@ -105,8 +117,9 @@ def read_queue(prefix, token=None, skip_ids=None, required_field=None):
             continue
         try:
             # Private store: reading a blob URL needs the bearer token too.
-            c = requests.get(b["url"], params={"v": str(int(time.time()))},
-                             headers={"Authorization": "Bearer " + token}, timeout=30)
+            c = http_call("blob", "download", lambda: requests.get(
+                b["url"], params={"v": str(int(time.time()))},
+                headers={"Authorization": "Bearer " + token}, timeout=30), pathname=b.get("pathname"))
             if c.ok:
                 e = c.json()
                 if isinstance(e, dict) and (not required_field or e.get(required_field)):

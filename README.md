@@ -168,6 +168,12 @@ functions:
 
 - `api/auth/google`, `api/auth/callback/google`, `api/auth/signout` — the sign-in
 - `api/me` — who is signed in; operators switch candidates here
+- `api/usage` + `/ops` — operator-only page of API consumption (Anthropic
+  tokens and estimated cost, JSearch requests against the monthly cap,
+  Firecrawl requests and failing URLs, blob operations, last run of each
+  pipeline stage). The pipeline records every metered call in a local ledger
+  (`apply_assistant/usage.py`) and publishes a 30-day rollup with each
+  `apply publish`; the page merges one file per checkout
 - `api/status` — persist the reviewer's decisions/edits (Vercel Blob)
 - `api/pdf` — render edited resume/letter HTML to a one-page PDF (headless Chromium)
 - `api/inbox` — queue manually-added job links (one blob per link, no lost updates)

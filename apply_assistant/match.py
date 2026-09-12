@@ -96,4 +96,7 @@ def run_match(db_path=None, profile_path=None, limit=None, rescore=False, method
         report["by_tier"][verdict["tier"]] = report["by_tier"].get(verdict["tier"], 0) + 1
     conn.commit()
     conn.close()
+    from .usage import stage
+    stage("match", total=report["total"], knocked_out=report["knocked_out"], survivors=report["survivors"],
+          scored=report["scored"], rescored=report["rescored"], scorer=using)
     return report

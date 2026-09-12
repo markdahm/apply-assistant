@@ -957,10 +957,14 @@ def read_submissions(token=None):
     if not token:
         raise RuntimeError(
             "no BLOB_READ_WRITE_TOKEN — set it in .env to pull remote submissions")
+    from .usage import http_call
+
     # Only THIS candidate's submissions: the store is shared, and the Desk
     # files each person's answers under their own prefix.
-    r = requests.get(BLOB_API, params={"prefix": blob_prefix() + BLOB_PREFIX, "limit": "100"},
-                     headers={"Authorization": "Bearer " + token}, timeout=30)
+    full_prefix = blob_prefix() + BLOB_PREFIX
+    r = http_call("blob", "list", lambda: requests.get(
+        BLOB_API, params={"prefix": full_prefix, "limit": "100"},
+        headers={"Authorization": "Bearer " + token}, timeout=30), prefix=full_prefix)
     r.raise_for_status()
     out = []
     for b in r.json().get("blobs", []):

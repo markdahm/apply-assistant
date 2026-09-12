@@ -41,6 +41,7 @@ const H = {
   start: require('../api/auth/google.js'),
   callback: require('../api/auth/callback/google.js'),
   signout: require('../api/auth/signout.js'),
+  usage: require('../api/usage.js'),
 };
 
 // ── Fake req/res ────────────────────────────────────────────────────────────
@@ -294,6 +295,62 @@ test('the callback refuses everyone when the deployment is not configured', asyn
   process.env.DESK_OPERATORS = '';
   const r = await call(H.callback, { url: '/api/auth/callback/google?code=c&state=s' });
   assert.equal(r.headers.location, '/login?error=not_configured');
+});
+
+// ── api/usage: operators only ───────────────────────────────────────────────
+
+test('api/usage refuses a candidate with 403 and never touches storage', async () => {
+  const r = await call(H.usage, { cookie: await cookieFor('ann@example.com') });
+  assert.equal(r.statusCode, 403);
+  assert.match(r.body, /operators only/);
+  assert.deepEqual(blobCalls, []);
+  assert.equal((await call(H.usage, {})).statusCode, 401);
+});
+
+test('api/usage lists the ops prefix for an operator and names each file\'s candidate', async () => {
+  listing = [
+    { pathname: `ops/usage/${ANN}.json`, url: 'https://x/ann', uploadedAt: '2026-09-12T00:00:00Z' },
+    { pathname: 'ops/usage/ffffffffffffffff.json', url: 'https://x/other', uploadedAt: '2026-09-11T00:00:00Z' },
+  ];
+  globalThis.fetch = async (url) => new Response(JSON.stringify({ schema: 'usage-rollup/1', generatedAt: 'x', from: String(url) }));
+  const r = await call(H.usage, { cookie: await cookieFor('mark@example.com') });
+  assert.equal(r.statusCode, 200, r.body);
+  assert.deepEqual(blobCalls.map((c) => c.prefix), ['ops/usage/']);
+  const body = r.json();
+  assert.equal(body.files.length, 2);
+  assert.equal(body.files[0].candidateEmail, 'ann@example.com');
+  assert.equal(body.files[1].candidateEmail, null, 'an id not on the roster is shown by id, not invented');
+  assert.equal(body.files[0].rollup.schema, 'usage-rollup/1');
+});
+
+test('api/usage reports a file it could not read instead of dropping it', async () => {
+  listing = [{ pathname: `ops/usage/${ANN}.json`, url: 'https://x/ann', uploadedAt: 'z' }];
+  globalThis.fetch = async () => new Response('', { status: 403 });
+  const body = (await call(H.usage, { cookie: await cookieFor('mark@example.com') })).json();
+  assert.equal(body.files.length, 1);
+  assert.equal(body.files[0].error, 'HTTP 403');
+  assert.equal(body.files[0].rollup, undefined);
+});
+
+// ── Where a sign-in lands ───────────────────────────────────────────────────
+
+async function signInAs(email, next) {
+  const start = await call(H.start, { url: '/api/auth/google' + (next ? '?next=' + encodeURIComponent(next) : '') });
+  const stateVal = start.cookies()[0].split(';')[0].split('=')[1];
+  const state = new URL(start.headers.location).searchParams.get('state');
+  const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  globalThis.fetch = async () => new Response(JSON.stringify({ id_token: `${b64({ alg: 'RS256' })}.${b64({ iss: 'https://accounts.google.com', aud: ENV.DESK_GOOGLE_CLIENT_ID, exp: Math.floor(Date.now() / 1000) + 60, email, email_verified: true })}.sig` }));
+  return call(H.callback, { url: `/api/auth/callback/google?code=c&state=${state}`, cookie: `desk_oauth_state=${stateVal}` });
+}
+
+test('an operator with no destination lands on the ops page; a candidate lands on the Desk', async () => {
+  assert.equal((await signInAs('mark@example.com')).headers.location, '/ops');
+  assert.equal((await signInAs('ann@example.com')).headers.location, '/');
+});
+
+test('a specific destination wins over the ops page for everyone', async () => {
+  assert.equal((await signInAs('mark@example.com', '/onboard')).headers.location, '/onboard');
+  assert.equal((await signInAs('ann@example.com', '/m')).headers.location, '/m');
 });
 
 test('sign-out clears both cookies with the shape they were set with, and is POST only', async () => {

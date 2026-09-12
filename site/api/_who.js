@@ -66,4 +66,25 @@ async function requireCandidate(req, res) {
   return { who, id, path: (name) => blobPath(id, name) };
 }
 
-module.exports = { lib, asRequest, secure, identify, requireCandidate };
+// Operators only. Used by the ops page's data: usage across every candidate
+// is the operator's business and nobody else's.
+//   401  not signed in / off the roster
+//   403  signed in as a candidate
+async function requireOperator(req, res) {
+  const who = await identify(req);
+  if (!who) {
+    res.statusCode = 401;
+    res.setHeader('Content-Type', 'application/json');
+    res.end('{"ok":false,"error":"not signed in"}');
+    return null;
+  }
+  if (who.role !== 'operator') {
+    res.statusCode = 403;
+    res.setHeader('Content-Type', 'application/json');
+    res.end('{"ok":false,"error":"operators only"}');
+    return null;
+  }
+  return who;
+}
+
+module.exports = { lib, asRequest, secure, identify, requireCandidate, requireOperator };

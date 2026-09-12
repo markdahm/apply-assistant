@@ -113,12 +113,16 @@ class JSearchSource(Source):
             params["date_posted"] = self.date_posted
         if cursor:
             params["cursor"] = cursor
-        resp = self.session.get(
+        # One request = one unit of the monthly RapidAPI quota, so every page
+        # is recorded whether or not it succeeds — a 429 spent nothing but
+        # still says the quota is gone.
+        from ..usage import http_call
+        resp = http_call("jsearch", "search", lambda: self.session.get(
             self.SEARCH_URL,
             headers={"X-RapidAPI-Key": self.api_key or "", "X-RapidAPI-Host": self.HOST},
             params=params,
             timeout=40,
-        )
+        ), query=self.query, page=("next" if cursor else "first"))
         resp.raise_for_status()
         # v2 returns {"data": {"jobs": [...], "cursor": "..."}}; the older
         # /search returned {"data": [...]}. Accept either so a future shape

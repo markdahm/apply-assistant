@@ -356,6 +356,7 @@
         + ME.candidates.map(function (c) {
             return '<option value="' + esc(c.id) + '"' + (ME.candidate && ME.candidate.id === c.id ? ' selected' : '') + '>' + esc(c.email) + '</option>';
           }).join('') + '</select>';
+      h += '<a class="out" href="/ops" style="text-decoration:none">Usage</a>';
     }
     h += '<span class="out" onclick="signOut()">Sign out</span>';
     el.innerHTML = h;

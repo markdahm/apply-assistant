@@ -177,6 +177,19 @@ test('both front ends load data from the API, keyed by who signed in', () => {
   assert.match(desk, /Array\.isArray\(window\.__DESK_DATA\)/, 'the Desk must treat an empty array as real, not as a cue for sample jobs');
 });
 
+test('the ops page is operator-only end to end', () => {
+  const ops = code(read('ops.html'));
+  assert.match(ops, /fetch\('api\/me'/, 'ops.html must check who is signed in before asking for usage');
+  assert.match(ops, /me\.role !== 'operator'/, 'a candidate reaching /ops is sent to the Desk');
+  assert.match(ops, /fetch\('api\/usage'/);
+  assert.match(ops, /api\/auth\/signout/);
+  const api = code(read('api/usage.js'));
+  assert.match(api, /requireOperator\(req,\s*res\)/, 'api/usage must refuse candidates server-side, not just in the page');
+  assert.ok(!/requireCandidate/.test(api), 'usage is not per-candidate data');
+  // Never an empty-looking success on a read failure.
+  assert.match(ops, /not a report of zero|nothing having been spent/, 'the page must distinguish "could not read" from "zero"');
+});
+
 test('the test directory itself is not deployed, and this suite is not empty', () => {
   assert.ok(read('.vercelignore').includes('tests/'));
   const files = readdirSync(new URL('.', import.meta.url)).filter((f) => f.endsWith('.test.mjs'));

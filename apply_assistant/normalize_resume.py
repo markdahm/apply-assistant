@@ -141,8 +141,9 @@ def normalize(source, verbose=True):
             msgs.append({"role": "user", "content":
                          "Your previous output broke these rules:\n" + "\n".join(feedback)
                          + "\nReturn corrected Markdown only. Copy text verbatim."})
-        resp = client.messages.create(
-            model=MODEL, max_tokens=8000, system=SYSTEM, messages=msgs)
+        from .usage import llm_call
+        resp = llm_call(client, "normalize-resume",
+                        model=MODEL, max_tokens=8000, system=SYSTEM, messages=msgs)
         if getattr(resp, "stop_reason", None) == "refusal":
             return None, {"ok": False, "errors": ["model declined"]}
         text = next((b.text for b in resp.content if getattr(b, "type", None) == "text"), "")

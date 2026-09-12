@@ -131,7 +131,9 @@ def _score_one_llm(client, profile_brief, row):
     user = (
         "CANDIDATE PROFILE:\n" + profile_brief + "\n\nJOB POSTING:\n" + _job_brief(row) + "\n\nScore the fit."
     )
-    resp = client.messages.create(
+    from .usage import llm_call
+    resp = llm_call(
+        client, "score",
         model=SCORE_MODEL,
         max_tokens=600,
         system=SYSTEM,

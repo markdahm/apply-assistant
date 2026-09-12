@@ -42,7 +42,8 @@ def scrape_job_page(url: str, timeout: int = 90):
     if not key:
         return None, "no FIRECRAWL_API_KEY"
     try:
-        resp = requests.post(
+        from .usage import http_call
+        resp = http_call("firecrawl", "scrape_manual", lambda: requests.post(
             "https://api.firecrawl.dev/v2/scrape",
             headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"},
             json={
@@ -51,7 +52,7 @@ def scrape_job_page(url: str, timeout: int = 90):
                 "formats": [{"type": "json", "prompt": "Extract this job posting.", "schema": SCHEMA}],
             },
             timeout=timeout,
-        )
+        ), url=url)
         body = resp.json()
         if not body.get("success"):
             return None, str(body.get("error") or resp.status_code)[:160]

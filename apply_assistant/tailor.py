@@ -272,8 +272,9 @@ def _generate_one(client, base, row):
         if feedback:
             msgs.append({"role": "user", "content": "Your previous attempt failed validation:\n"
                          + "\n".join(feedback[:6]) + "\nFix these and return the corrected JSON only."})
-        resp = client.messages.create(
-            model=TAILOR_MODEL, max_tokens=3000, system=_system_prompt(), messages=msgs)
+        from .usage import llm_call
+        resp = llm_call(client, "tailor",
+                        model=TAILOR_MODEL, max_tokens=3000, system=_system_prompt(), messages=msgs)
         if getattr(resp, "stop_reason", None) == "refusal":
             return None, ["model declined"]
         text = next((b.text for b in resp.content if getattr(b, "type", None) == "text"), "")

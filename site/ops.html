@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>The Desk — Operations</title>
+<style>
+  :root { --paper:#F4EFE4; --card:#FBF8F1; --ink:#221E1A; --muted:#6B6258; --faint:#9A9082;
+          --rule:#D8CFBE; --green:#2F4A3C; --gold:#C08A2D; --red:#B4472E; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--paper); color:var(--ink); font:15px/1.5 'Hanken Grotesk',-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+  header { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 24px;
+           border-bottom:1px solid var(--rule); background:rgba(244,239,228,.95); position:sticky; top:0; }
+  header .brand { font-weight:600; font-size:20px; letter-spacing:-.02em; }
+  header .brand small { font-weight:500; color:var(--muted); font-size:12px; letter-spacing:.08em; text-transform:uppercase; margin-left:10px; }
+  header nav { display:flex; gap:10px; align-items:center; font-size:12px; color:var(--muted); }
+  header nav a, header nav span[role=button] { color:var(--ink); text-decoration:none; border:1px solid var(--rule); border-radius:4px; padding:6px 10px; cursor:pointer; text-transform:uppercase; letter-spacing:.06em; font-size:11px; }
+  main { max-width:1180px; margin:0 auto; padding:22px 24px 60px; }
+  .banner { border-radius:6px; padding:10px 14px; margin-bottom:18px; font-size:14px; }
+  .banner.warn { background:#F3EAD3; color:#5A4A1E; border:1px solid #E1CF9A; }
+  .banner.bad  { background:#F6DFD8; color:#5A2418; border:1px solid #E7B9AD; }
+  .banner.ok   { background:#E7EAD8; color:#2F4A3C; border:1px solid #C9D3B5; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:14px; }
+  .card { background:var(--card); border:1px solid var(--rule); border-radius:8px; padding:16px 18px; }
+  .card h2 { font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); font-weight:600; margin-bottom:8px; display:flex; justify-content:space-between; }
+  .card h2 .unit { font-weight:500; letter-spacing:0; text-transform:none; color:var(--faint); }
+  .big { font-size:34px; font-weight:600; letter-spacing:-.02em; line-height:1.1; font-variant-numeric:tabular-nums; }
+  .big small { font-size:14px; color:var(--muted); font-weight:500; margin-left:6px; }
+  .sub { color:var(--muted); font-size:13px; margin-top:4px; }
+  .bars { display:flex; align-items:flex-end; gap:2px; height:44px; margin-top:12px; }
+  .bars i { flex:1; background:var(--green); opacity:.7; border-radius:2px 2px 0 0; min-height:1px; }
+  .bars i.z { background:var(--rule); opacity:1; }
+  .bars i.bad { background:var(--red); }
+  .barlbl { display:flex; justify-content:space-between; font-size:10px; color:var(--faint); margin-top:3px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; margin-top:10px; }
+  th { text-align:left; font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--faint); font-weight:600; padding:4px 0; border-bottom:1px solid var(--rule); }
+  td { padding:5px 0; border-bottom:1px solid #EAE3D5; font-variant-numeric:tabular-nums; vertical-align:top; }
+  td.n, th.n { text-align:right; }
+  .meter { height:8px; background:var(--rule); border-radius:4px; overflow:hidden; margin-top:10px; }
+  .meter i { display:block; height:100%; background:var(--green); }
+  .meter i.warn { background:var(--gold); } .meter i.bad { background:var(--red); }
+  .section { margin-top:26px; }
+  .section h3 { font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); font-weight:600; margin-bottom:10px; }
+  .muted { color:var(--muted); } .faint { color:var(--faint); font-size:12px; }
+  .mono { font-family:ui-monospace,Menlo,monospace; font-size:12px; }
+  .url { max-width:520px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:inline-block; vertical-align:bottom; }
+  .empty { padding:40px; text-align:center; color:var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">The Desk <small> Operations</small></div>
+  <nav>
+    <span id="who" class="muted"></span>
+    <a href="/desk">Open the Desk</a>
+    <span role="button" id="refresh">Refresh</span>
+    <span role="button" id="signout">Sign out</span>
+  </nav>
+</header>
+<main id="main"><div class="empty">Loading…</div></main>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+  var fmt = function (n) { return (n == null) ? '—' : Number(n).toLocaleString(); };
+  var usd = function (n) { return (n == null) ? '—' : '$' + Number(n).toFixed(n < 1 ? 3 : 2); };
+  var ago = function (iso) {
+    if (!iso) return 'never';
+    var ms = Date.now() - new Date(iso).getTime(); var h = ms / 36e5;
+    if (h < 1) return Math.round(ms / 6e4) + ' min ago';
+    if (h < 48) return Math.round(h) + ' h ago';
+    return Math.round(h / 24) + ' days ago';
+  };
+
+  // Last N days as a bar strip. Missing days are drawn as empty, so a gap in
+  // the pipeline looks like a gap and not like a smooth line.
+  function bars(series, days, badKey) {
+    var byDay = {}; (series || []).forEach(function (d) { byDay[d.day] = d.n; });
+    var out = [], max = 0, keys = [];
+    for (var i = days - 1; i >= 0; i--) {
+      var d = new Date(Date.now() - i * 864e5).toISOString().slice(0, 10);
+      keys.push(d); max = Math.max(max, byDay[d] || 0);
+    }
+    keys.forEach(function (d) {
+      var v = byDay[d] || 0;
+      var h = max ? Math.max(2, Math.round(v / max * 44)) : 1;
+      out.push('<i class="' + (v ? '' : 'z') + '" style="height:' + h + 'px" title="' + d + ': ' + fmt(v) + '"></i>');
+    });
+    return '<div class="bars">' + out.join('') + '</div><div class="barlbl"><span>' + keys[0].slice(5) + '</span><span>today</span></div>';
+  }
+
+  // Add series across checkouts, day by day.
+  function sumSeries(list) {
+    var acc = {};
+    list.forEach(function (s) { (s || []).forEach(function (d) { acc[d.day] = (acc[d.day] || 0) + d.n; }); });
+    return Object.keys(acc).sort().map(function (k) { return { day: k, n: acc[k] }; });
+  }
+
+  function render(data) {
+    var files = (data.files || []).filter(function (f) { return f.rollup; });
+    var broken = (data.files || []).filter(function (f) { return !f.rollup; });
+    var main = $('main');
+    if (!files.length) {
+      main.innerHTML = '<div class="banner warn">No usage rollup has been published yet. The pipeline publishes one with every <span class="mono">apply publish</span>; until then there is nothing to show — which is different from nothing having been spent.</div>';
+      return;
+    }
+    var R = files.map(function (f) { return f.rollup; });
+    var newest = R.map(function (r) { return r.generatedAt; }).sort().pop();
+    var oldest = R.map(function (r) { return r.generatedAt; }).sort()[0];
+    var staleH = (Date.now() - new Date(newest).getTime()) / 36e5;
+    var html = '';
+    html += '<div class="banner ' + (staleH > 72 ? 'bad' : staleH > 24 ? 'warn' : 'ok') + '">'
+      + 'Numbers are as of <b>' + esc(new Date(newest).toLocaleString()) + '</b> (' + ago(newest) + ')'
+      + (files.length > 1 ? ', merged across ' + files.length + ' checkouts (oldest rollup ' + ago(oldest) + ')' : '')
+      + '. Window: last ' + R[0].windowDays + ' days. Costs are estimates from Anthropic list prices as of ' + esc(R[0].anthropic.prices_as_of) + '.'
+      + (broken.length ? ' <b>' + broken.length + ' rollup file(s) could not be read.</b>' : '')
+      + '</div>';
+
+    // ── Totals ────────────────────────────────────────────────────────────
+    var A = R.map(function (r) { return r.anthropic; }), J = R.map(function (r) { return r.jsearch; }),
+        F = R.map(function (r) { return r.firecrawl; }), B = R.map(function (r) { return r.blob; });
+    var sum = function (arr, k) { return arr.reduce(function (t, x) { return t + (x[k] || 0); }, 0); };
+    var jsMtd = sum(J, 'month_to_date'), jsCap = J[0].monthly_cap, jsPct = jsCap ? Math.min(100, Math.round(jsMtd / jsCap * 100)) : 0;
+    var fcReq = sum(F, 'requests'), fcFail = sum(F, 'failed');
+
+    html += '<div class="grid">';
+    html += '<div class="card"><h2>Anthropic <span class="unit">estimated USD</span></h2>'
+      + '<div class="big">' + usd(sum(A, 'cost_usd')) + '<small> ' + fmt(sum(A, 'calls')) + ' calls</small></div>'
+      + '<div class="sub">' + fmt(sum(A, 'input_tokens')) + ' in · ' + fmt(sum(A, 'output_tokens')) + ' out · month to date ' + usd(sum(A, 'month_to_date_cost_usd'))
+      + (sum(A, 'unpriced_calls') ? ' · <b>' + sum(A, 'unpriced_calls') + ' unpriced</b>' : '') + (sum(A, 'failed') ? ' · <b style="color:var(--red)">' + sum(A, 'failed') + ' failed</b>' : '') + '</div>'
+      + bars(sumSeries(A.map(function (a) { return a.by_day; })), 30) + '</div>';
+    html += '<div class="card"><h2>JSearch (RapidAPI) <span class="unit">requests</span></h2>'
+      + '<div class="big">' + fmt(jsMtd) + '<small> of ' + fmt(jsCap) + ' this month</small></div>'
+      + '<div class="meter"><i class="' + (jsPct >= 90 ? 'bad' : jsPct >= 70 ? 'warn' : '') + '" style="width:' + jsPct + '%"></i></div>'
+      + '<div class="sub">' + fmt(Math.max(0, jsCap - jsMtd)) + ' remaining · ' + fmt(sum(J, 'requests')) + ' in window'
+      + (sum(J, 'rate_limited') ? ' · <b style="color:var(--red)">' + sum(J, 'rate_limited') + ' rate-limited (429)</b>' : '') + '</div>'
+      + bars(sumSeries(J.map(function (j) { return j.by_day; })), 30) + '</div>';
+    html += '<div class="card"><h2>Firecrawl <span class="unit">requests</span></h2>'
+      + '<div class="big">' + fmt(fcReq) + '<small> ' + (fcReq ? Math.round(fcFail / fcReq * 100) : 0) + '% failed</small></div>'
+      + '<div class="sub">' + Object.keys(F[0].by_op || {}).map(function (k) { return k + ' ' + fmt(sum(F.map(function (f) { return f.by_op[k] || {}; }), 'n')); }).join(' · ') + '</div>'
+      + bars(sumSeries(F.map(function (f) { return f.by_day; })), 30) + '</div>';
+    html += '<div class="card"><h2>Vercel Blob <span class="unit">operations we made</span></h2>'
+      + '<div class="big">' + fmt(sum(B, 'operations')) + '<small> in window</small></div>'
+      + '<div class="sub">' + Object.keys(B[0].by_op || {}).map(function (k) { return k + ' ' + fmt(sum(B.map(function (b) { return b.by_op[k] || {}; }), 'n')); }).join(' · ')
+      + ' · counted here, not read from Vercel\'s meter; the Desk\'s own reads are not included</div>'
+      + bars(sumSeries(B.map(function (b) { return b.by_day; })), 30) + '</div>';
+    html += '</div>';
+
+    // ── Per checkout ──────────────────────────────────────────────────────
+    files.forEach(function (f) {
+      var r = f.rollup;
+      html += '<div class="section"><h3>' + esc(f.candidateEmail || ('candidate ' + f.candidateId)) + ' <span class="faint">· ' + esc(r.host || '') + ' · rollup ' + ago(r.generatedAt) + ' · ' + fmt(r.ledgerLines) + ' ledger lines</span></h3>';
+      html += '<div class="grid">';
+      // Anthropic by command
+      html += '<div class="card"><h2>Anthropic by command</h2><table><tr><th>Command</th><th class="n">Calls</th><th class="n">In</th><th class="n">Out</th><th class="n">USD</th></tr>';
+      Object.keys(r.anthropic.by_command).sort().forEach(function (k) { var c = r.anthropic.by_command[k];
+        html += '<tr><td>' + esc(k) + (c.failed ? ' <span style="color:var(--red)">(' + c.failed + ' failed)</span>' : '') + '</td><td class="n">' + fmt(c.calls) + '</td><td class="n">' + fmt(c.input_tokens) + '</td><td class="n">' + fmt(c.output_tokens) + '</td><td class="n">' + usd(c.cost_usd) + '</td></tr>'; });
+      if (!Object.keys(r.anthropic.by_command).length) html += '<tr><td colspan="5" class="muted">no model calls in window</td></tr>';
+      html += '</table><table><tr><th>Model</th><th class="n">Calls</th><th class="n">USD</th></tr>';
+      Object.keys(r.anthropic.by_model).forEach(function (k) { var c = r.anthropic.by_model[k];
+        html += '<tr><td class="mono">' + esc(k) + '</td><td class="n">' + fmt(c.calls) + '</td><td class="n">' + (c.unpriced ? '<span class="faint">no price</span>' : usd(c.cost_usd)) + '</td></tr>'; });
+      html += '</table></div>';
+      // Stages
+      html += '<div class="card"><h2>Pipeline stages</h2><table><tr><th>Stage</th><th>Last run</th><th class="n">Runs</th><th>Last result</th></tr>';
+      ['sweep', 'match', 'enrich', 'publish'].concat(Object.keys(r.stages).filter(function (k) { return ['sweep', 'match', 'enrich', 'publish'].indexOf(k) < 0; })).forEach(function (k) {
+        var s = r.stages[k]; if (!s) { html += '<tr><td>' + esc(k) + '</td><td class="muted">never in window</td><td class="n">0</td><td></td></tr>'; return; }
+        var last = s.last || {}; var bits = Object.keys(last).filter(function (x) { return x !== 'ts' && x !== 'ms' && x !== 'failed_sources'; }).map(function (x) { return x.replace(/_/g, ' ') + ' ' + (Array.isArray(last[x]) ? last[x].length : esc(String(last[x]))); });
+        if (last.failed_sources && last.failed_sources.length) bits.push('<span style="color:var(--red)">failed: ' + esc(last.failed_sources.join(', ')) + '</span>');
+        html += '<tr><td>' + esc(k) + '</td><td title="' + esc(s.last_run) + '">' + ago(s.last_run) + '</td><td class="n">' + fmt(s.runs) + '</td><td class="faint">' + bits.join(' · ') + '</td></tr>'; });
+      html += '</table></div>';
+      // Firecrawl failing URLs
+      if (r.firecrawl.failing_urls && r.firecrawl.failing_urls.length) {
+        html += '<div class="card"><h2>Firecrawl: URLs eating the budget</h2><table><tr><th>URL</th><th class="n">Failures</th></tr>';
+        r.firecrawl.failing_urls.forEach(function (u) { html += '<tr><td><span class="url mono" title="' + esc(u.url) + '">' + esc(u.url) + '</span></td><td class="n">' + fmt(u.failures) + '</td></tr>'; });
+        html += '</table><div class="sub">Enrichment gives up on a URL after 3 failures.</div></div>';
+      }
+      html += '</div></div>';
+    });
+    main.innerHTML = html;
+  }
+
+  function load() {
+    $('main').innerHTML = '<div class="empty">Loading…</div>';
+    fetch('api/me', { cache: 'no-store' }).then(function (r) {
+      if (r.status === 401) { location.href = '/login?next=' + encodeURIComponent('/ops'); return null; }
+      return r.ok ? r.json() : null;
+    }).then(function (me) {
+      if (!me) { $('main').innerHTML = '<div class="banner bad">Could not confirm who is signed in.</div>'; return; }
+      if (me.role !== 'operator') { location.replace('/desk'); return; }
+      $('who').textContent = me.email;
+      return fetch('api/usage', { cache: 'no-store' }).then(function (r) {
+        if (!r.ok) throw new Error('api/usage ' + r.status);
+        return r.json();
+      }).then(render);
+    }).catch(function (e) {
+      $('main').innerHTML = '<div class="banner bad">Could not load usage: ' + esc(e.message || e) + '. This is a failure to read, not a report of zero.</div>';
+    });
+  }
+  $('refresh').onclick = load;
+  $('signout').onclick = function () { fetch('api/auth/signout', { method: 'POST' }).catch(function () {}).then(function () { location.href = '/login'; }); };
+  load();
+})();
+</script>
+</body>
+</html>

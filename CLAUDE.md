@@ -438,6 +438,33 @@ had been attached to it were both deleted 12 Sep 2026.
 `load_tailored()` still keys by job id alone — safe while each checkout keeps
 its own database, which is the rule.
 
+## The ops page — API consumption, 12 September 2026
+
+`/ops` is what an operator lands on after a plain sign-in (a candidate never
+sees it; `api/usage` answers them 403). It shows what the pipeline has spent
+on every metered API, because none of those calls happen on Vercel:
+
+- **`apply_assistant/usage.py`** is the ledger. Every `client.messages.create`
+  goes through `llm_call()` (records model, the four usage counters, an
+  estimated cost from the price table cached 2026-06-24, stop reason); every
+  Firecrawl, JSearch and Blob request goes through `http_call()` (status, ms,
+  a short meta such as the URL or query); each pipeline stage ends with
+  `stage()` (its headline counts). One JSON line per call in
+  `~/.apply-assistant/usage.jsonl` (beside the DB, per checkout). Recording
+  swallows every error — a ledger problem costs a stderr line, never a run.
+  `tests/test_usage.py` proves that, and scans the package so a new call site
+  that bypasses the wrappers fails the suite.
+- **`rollup()`** windows the ledger to 30 days (JSearch month-to-date follows
+  the calendar month, cap `JSEARCH_MONTHLY_CAP`, default 200) and
+  **`publish_usage()`** puts it at `ops/usage/<candidate-id>.json` at the tail
+  of every `publish_live`, best effort.
+- **`site/api/usage.js`** (operator-only) lists that prefix and returns every
+  checkout's file; **`site/ops.html`** sums them and shows each checkout, with
+  a staleness banner keyed to the newest `generatedAt`. A read failure or an
+  empty prefix is said out loud, never rendered as zero.
+- Blob operations are what WE counted, not Vercel's meter; the Desk's own
+  reads are not included. Costs are estimates. Both caveats are on the page.
+
 ## The search fixes — 12 September 2026
 
 A read of the real funnel (7,861 jobs, 7,823 knocked out, zero strong matches

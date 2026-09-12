@@ -41,7 +41,8 @@ def _api_key():
 
 
 def scrape_detail(url, key, timeout=90):
-    resp = requests.post(
+    from .usage import http_call
+    resp = http_call("firecrawl", "scrape_detail", lambda: requests.post(
         FIRECRAWL_URL,
         headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"},
         json={
@@ -55,7 +56,7 @@ def scrape_detail(url, key, timeout=90):
             }],
         },
         timeout=timeout,
-    )
+    ), url=url)
     resp.raise_for_status()
     return ((resp.json().get("data") or {}).get("json")) or {}
 
@@ -173,4 +174,7 @@ def run_enrich(db_path=None, limit=40, verbose=True):
             print("  ..  {0}: nothing new extracted".format(r["title"][:46]))
     conn.commit()
     conn.close()
+    from .usage import stage
+    stage("enrich", attempted=report["attempted"], enriched=report["enriched"],
+          failed=report["failed"], salary=report["salary"], benefits=report["benefits"])
     return report

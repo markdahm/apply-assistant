@@ -31,15 +31,19 @@ def read_status_map(token=None):
     token = token or _blob_token()
     if not token:
         raise RuntimeError("no BLOB_READ_WRITE_TOKEN")
+    from .usage import http_call
+
     pathname = blob_prefix() + "status.json"
-    r = requests.get(BLOB_API, params={"prefix": pathname, "limit": "5"},
-                     headers={"Authorization": "Bearer " + token}, timeout=30)
+    r = http_call("blob", "list", lambda: requests.get(
+        BLOB_API, params={"prefix": pathname, "limit": "5"},
+        headers={"Authorization": "Bearer " + token}, timeout=30), prefix=pathname)
     r.raise_for_status()
     hit = next((b for b in r.json().get("blobs", []) if b.get("pathname") == pathname), None)
     if not hit:
         return {}
-    c = requests.get(hit["url"], params={"v": str(int(time.time()))},
-                     headers={"Authorization": "Bearer " + token}, timeout=30)
+    c = http_call("blob", "download", lambda: requests.get(
+        hit["url"], params={"v": str(int(time.time()))},
+        headers={"Authorization": "Bearer " + token}, timeout=30), pathname=pathname)
     c.raise_for_status()
     body = c.json()
     return body if isinstance(body, dict) else {}

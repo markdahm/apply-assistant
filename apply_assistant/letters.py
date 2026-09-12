@@ -187,7 +187,8 @@ def _generate_one(client, system, facts_text, row):
         if feedback:
             msgs.append({"role": "user", "content": "Your previous letter failed validation:\n"
                          + "\n".join(feedback[:5]) + "\nFix these and return corrected JSON only."})
-        resp = client.messages.create(model=LETTER_MODEL, max_tokens=2200, system=system, messages=msgs)
+        from .usage import llm_call
+        resp = llm_call(client, "letters", model=LETTER_MODEL, max_tokens=2200, system=system, messages=msgs)
         if getattr(resp, "stop_reason", None) == "refusal":
             return None, ["model declined"]
         doc = _extract_json(next((b.text for b in resp.content if getattr(b, "type", None) == "text"), ""))

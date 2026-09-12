@@ -100,7 +100,11 @@ module.exports = async (req, res) => {
     cookieHeader(OAUTH_STATE_COOKIE, '', { maxAge: 0, secure: secure(req) }),
   ]);
   console.log('google sign-in: ' + claims.email + ' (' + role + ')');
+  // An operator with no particular destination lands on the ops page — API
+  // consumption first, then through to whichever Desk they pick. A candidate,
+  // or anyone who asked for a specific page, goes where they were headed.
+  const dest = safeNextPath(started.next);
   res.statusCode = 302;
-  res.setHeader('Location', safeNextPath(started.next));
+  res.setHeader('Location', (dest === '/' && role === 'operator') ? '/ops' : dest);
   return res.end();
 };

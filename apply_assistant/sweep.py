@@ -205,4 +205,13 @@ def run_sweep(config=None, db_path=None, verbose=True):
         "SELECT COUNT(DISTINCT dedupe_key) FROM jobs"
     ).fetchone()[0]
     conn.close()
+
+    # The ops page's coverage line: how many sources answered, and which did
+    # not. A sweep with two-thirds of its sources rate-limited looks like a
+    # quiet week downstream; this is where that becomes visible.
+    from .usage import stage
+    failed = [s for s in report["sources"] if not s["ok"]]
+    stage("sweep", sources_ok=len(report["sources"]) - len(failed), sources_failed=len(failed),
+          failed_sources=[s["source"][:60] for s in failed][:12],
+          fetched=report["fetched"], inserted=report["inserted"], updated=report["updated"])
     return report
