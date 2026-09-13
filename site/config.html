@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
 <title>The Desk — Settings</title>
+<script src="./config-forms.js"></script>
 <style>
   :root { --paper:#F4EFE4; --card:#FBF8F1; --ink:#221E1A; --muted:#6B6258; --faint:#9A9082;
           --rule:#D8CFBE; --green:#2F4A3C; --gold:#C08A2D; --red:#B4472E; }
@@ -16,7 +17,7 @@
   header .brand small { font-weight:500; color:var(--muted); font-size:12px; letter-spacing:.08em; text-transform:uppercase; margin-left:10px; }
   header nav { display:flex; gap:10px; align-items:center; font-size:12px; color:var(--muted); }
   header nav a, header nav span[role=button] { color:var(--ink); text-decoration:none; border:1px solid var(--rule); border-radius:4px; padding:6px 10px; cursor:pointer; text-transform:uppercase; letter-spacing:.06em; font-size:11px; }
-  main { max-width:1100px; margin:0 auto; padding:22px 24px 60px; }
+  main { max-width:960px; margin:0 auto; padding:22px 24px 80px; }
   .banner { border-radius:6px; padding:10px 14px; margin-bottom:16px; font-size:14px; }
   .banner.warn { background:#F3EAD3; color:#5A4A1E; border:1px solid #E1CF9A; }
   .banner.bad  { background:#F6DFD8; color:#5A2418; border:1px solid #E7B9AD; }
@@ -25,20 +26,41 @@
   .tab { border:1px solid var(--rule); border-radius:4px; padding:7px 12px; cursor:pointer; font-size:13px; background:var(--card); color:var(--muted); }
   .tab.on { background:var(--ink); color:var(--paper); border-color:var(--ink); }
   .tab .dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--gold); margin-left:6px; vertical-align:middle; }
-  .card { background:var(--card); border:1px solid var(--rule); border-radius:8px; padding:16px 18px; }
-  .meta { display:flex; justify-content:space-between; gap:12px; align-items:baseline; margin-bottom:8px; }
+  .card { background:var(--card); border:1px solid var(--rule); border-radius:8px; padding:18px 20px; }
+  .meta { display:flex; justify-content:space-between; gap:12px; align-items:baseline; margin-bottom:6px; flex-wrap:wrap; }
   .meta h2 { font-size:13px; letter-spacing:.06em; text-transform:uppercase; font-weight:600; }
   .meta .faint { color:var(--faint); font-size:12px; }
-  textarea { width:100%; min-height:520px; resize:vertical; font:13px/1.45 ui-monospace,Menlo,Consolas,monospace; color:var(--ink);
+  .what { color:var(--muted); font-size:13px; margin-bottom:14px; }
+  .mode { display:inline-flex; border:1px solid var(--rule); border-radius:4px; overflow:hidden; font-size:11px; text-transform:uppercase; letter-spacing:.06em; }
+  .mode span { padding:5px 10px; cursor:pointer; color:var(--muted); }
+  .mode span.on { background:var(--ink); color:var(--paper); }
+  /* form */
+  .fsec { border-top:1px solid var(--rule); padding:16px 0 6px; }
+  .fsec h3 { font-size:15px; font-weight:600; margin-bottom:4px; }
+  .fsec .note { color:var(--muted); font-size:13px; margin-bottom:10px; }
+  .field { margin:10px 0 14px; }
+  .field label { display:block; font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); font-weight:600; margin-bottom:4px; }
+  .field .help { color:var(--faint); font-size:12px; margin:-2px 0 6px; }
+  .field input[type=text], .field input[type=number], .field select, .field textarea {
+    width:100%; font:14px/1.45 inherit; color:var(--ink); background:#fff; border:1px solid var(--rule); border-radius:6px; padding:9px 11px; }
+  .field textarea { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:13px; resize:vertical; }
+  .field input:focus, .field select:focus, .field textarea:focus { outline:none; border-color:var(--green); }
+  .field.check { display:flex; align-items:center; gap:10px; }
+  .field.check input { width:18px; height:18px; } .field.check label { margin:0; text-transform:none; letter-spacing:0; font-size:14px; color:var(--ink); font-weight:500; }
+  .job { border:1px solid var(--rule); border-radius:8px; padding:12px 14px 4px; margin:10px 0; background:#fff8; }
+  .jobhead { display:flex; justify-content:space-between; align-items:center; font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); font-weight:600; }
+  button.link { font:inherit; font-size:13px; background:none; border:none; color:var(--green); cursor:pointer; padding:4px 0; text-decoration:underline; }
+  button.link.danger { color:var(--red); }
+  .addrow { padding:10px 0; display:flex; gap:18px; }
+  /* raw */
+  textarea.raw { width:100%; min-height:520px; resize:vertical; font:13px/1.45 ui-monospace,Menlo,Consolas,monospace; color:var(--ink);
              background:#fff; border:1px solid var(--rule); border-radius:6px; padding:12px; tab-size:2; }
-  textarea:focus { outline:none; border-color:var(--green); }
-  .row { display:flex; gap:10px; align-items:center; margin-top:10px; flex-wrap:wrap; }
-  button { font:inherit; font-size:13px; font-weight:600; border:1px solid var(--rule); border-radius:6px; padding:8px 14px; cursor:pointer; background:var(--card); color:var(--ink); }
-  button.primary { background:var(--green); color:#fff; border-color:var(--green); }
-  button[disabled] { opacity:.5; cursor:default; }
-  .msg { font-size:13px; }
-  .msg.bad { color:var(--red); } .msg.ok { color:var(--green); } .msg.muted { color:var(--muted); }
-  .what { color:var(--muted); font-size:13px; margin-bottom:10px; }
+  /* actions */
+  .actions { position:sticky; bottom:0; background:rgba(244,239,228,.96); border-top:1px solid var(--rule); margin:18px -20px -18px; padding:12px 20px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; border-radius:0 0 8px 8px; }
+  button.btn { font:inherit; font-size:13px; font-weight:600; border:1px solid var(--rule); border-radius:6px; padding:8px 14px; cursor:pointer; background:var(--card); color:var(--ink); }
+  button.btn.primary { background:var(--green); color:#fff; border-color:var(--green); }
+  button.btn[disabled] { opacity:.5; cursor:default; }
+  .msg { font-size:13px; } .msg.bad { color:var(--red); } .msg.ok { color:var(--green); } .msg.muted { color:var(--muted); }
   .empty { padding:40px; text-align:center; color:var(--muted); }
 </style>
 </head>
@@ -59,18 +81,32 @@
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
   var ago = function (ms) { if (!ms) return 'never'; var h = (Date.now() - ms) / 36e5; if (h < 1) return Math.round(h * 60) + ' min ago'; if (h < 48) return Math.round(h) + ' h ago'; return Math.round(h / 24) + ' days ago'; };
 
-  // What each file is for, in the candidate's terms. These match the pipeline's
-  // own reading of them — facts only from the resume and experience bank,
-  // register only from the writing samples.
   var ABOUT = {
-    'profile.json':       'What the filter and the scorer know about you: target titles, skills, locations, pay floor, exclusions. JSON — it must keep its "candidate" and "preferences" sections.',
-    'sources.json':       'Where the sweep looks: employers by careers system, and the JSearch phrases used word for word. JSON.',
-    'resume.md':          'Your resume as the tailor reads it. Every tailored bullet must trace back to a line here; nothing gets invented. Headings and bullets matter.',
+    'profile.json':       'What the filter and the scorer know about you: target titles, skills, places, pay floor, exclusions.',
+    'sources.json':       'Where the sweep looks: employers by careers system, careers pages to scrape, and the search phrases used word for word.',
+    'resume.md':          'Your resume as the tailor reads it. Every tailored bullet must trace back to a line here; nothing gets invented.',
     'experience_bank.md': 'Older roles and facts that are not on the resume. Cover letters may cite facts from here.',
     'voice_real.md':      'Your real writing — emails, notes. Used only for tone, never for facts.'
   };
 
-  var files = [], current = null, dirty = {};
+  var files = [], current = null, dirty = {}, mode = {}, models = {};
+
+  function formFor(name) { return (window.DeskForms || {})[name] || null; }
+  function isDirty() { return Object.keys(dirty).some(function (k) { return dirty[k]; }); }
+
+  // The current text of a file as the user has it now: from the form (read →
+  // compose) when in form mode, from the raw box otherwise.
+  function currentText(f) {
+    var form = formFor(f.name);
+    if (form && mode[f.name] !== 'text') {
+      var root = $('form');
+      if (!root) return f.content || '';
+      models[f.name] = form.read(root, models[f.name]);
+      return form.compose(models[f.name], f.content || '');
+    }
+    var ed = $('ed');
+    return ed ? ed.value : (f.content || '');
+  }
 
   function render() {
     var main = $('main');
@@ -78,35 +114,78 @@
     var missing = files.filter(function (f) { return f.content == null; });
     var h = '';
     if (missing.length) {
-      h += '<div class="banner warn">' + missing.length + ' of 5 files are not in the store yet, so there is nothing to edit for them. On the pipeline machine run <span class="mono">apply config --push</span> once; after that, every save here is what the next run uses.</div>';
+      h += '<div class="banner warn">' + missing.length + ' of 5 files are not in the store yet. On the pipeline machine run <span class="mono">apply config --push</span> once; after that, every save here is what the next run uses.</div>';
     }
     h += '<div class="banner info">Saving here changes what the pipeline runs on at its next pull. Re-running the onboarding fetch regenerates all five from a NEW form submission and overwrites these — that only happens when an operator does it by hand.</div>';
     h += '<div class="tabs">' + files.map(function (f) {
       return '<span class="tab' + (f.name === current ? ' on' : '') + '" data-name="' + esc(f.name) + '">' + esc(f.name) + (dirty[f.name] ? '<span class="dot" title="unsaved"></span>' : '') + '</span>';
     }).join('') + '</div>';
+
     var f = files.find(function (x) { return x.name === current; });
+    var form = formFor(f.name);
+    var useForm = form && mode[f.name] !== 'text' && f.content != null;
+    if (useForm && !models[f.name]) models[f.name] = form.parse(f.content);
+
     h += '<div class="card">'
-      + '<div class="meta"><h2>' + esc(f.name) + '</h2><span class="faint">' + (f.content == null ? 'not in the store yet' : (f.size + ' bytes · last saved ' + ago(f.updatedAt) + (f.by ? ' by ' + esc(f.by) : ''))) + '</span></div>'
-      + '<div class="what">' + esc(ABOUT[f.name] || '') + '</div>'
-      + '<textarea id="ed" spellcheck="false"' + (f.content == null ? ' disabled placeholder="Not published yet."' : '') + '>' + esc(f.content == null ? '' : f.content) + '</textarea>'
-      + '<div class="row">'
-      + (f.name.slice(-5) === '.json' ? '<button id="check">Check JSON</button>' : '')
-      + '<button id="save" class="primary"' + (f.content == null ? ' disabled' : '') + '>Save ' + esc(f.name) + '</button>'
-      + '<button id="revert">Revert</button>'
+      + '<div class="meta"><h2>' + esc(f.name) + '</h2>'
+      + (form ? '<span class="mode"><span data-mode="form" class="' + (useForm ? 'on' : '') + '">Form</span><span data-mode="text" class="' + (useForm ? '' : 'on') + '">Text</span></span>' : '')
+      + '<span class="faint">' + (f.content == null ? 'not in the store yet' : (f.size + ' bytes · last saved ' + ago(f.updatedAt) + (f.by ? ' by ' + esc(f.by) : ''))) + '</span></div>'
+      + '<div class="what">' + esc(ABOUT[f.name] || '') + '</div>';
+    if (useForm) {
+      h += '<div id="form">' + form.render(models[f.name]) + '</div>';
+    } else {
+      h += '<textarea id="ed" class="raw" spellcheck="false"' + (f.content == null ? ' disabled placeholder="Not published yet."' : '') + '>' + esc(f.content == null ? '' : f.content) + '</textarea>';
+    }
+    h += '<div class="actions">'
+      + '<button id="save" class="btn primary"' + (f.content == null ? ' disabled' : '') + '>Save ' + esc(f.name) + '</button>'
+      + '<button id="revert" class="btn">Revert</button>'
+      + (f.name.slice(-5) === '.json' && !useForm ? '<button id="check" class="btn">Check JSON</button>' : '')
       + '<span id="msg" class="msg muted"></span>'
       + '</div></div>';
     main.innerHTML = h;
+
     Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (t) { t.onclick = function () { switchTo(t.getAttribute('data-name')); }; });
-    var ed = $('ed');
-    ed.oninput = function () { dirty[current] = ed.value !== (f.content || ''); var tab = document.querySelector('.tab.on'); if (tab) tab.innerHTML = esc(current) + (dirty[current] ? '<span class="dot" title="unsaved"></span>' : ''); };
-    if ($('check')) $('check').onclick = function () { var e = jsonProblem(current, ed.value); say(e ? 'bad' : 'ok', e || 'Valid JSON.'); };
-    $('revert').onclick = function () { ed.value = f.content || ''; dirty[current] = false; render(); };
-    $('save').onclick = function () { save(f, ed.value); };
-    ed.onkeydown = function (e) { if ((e.metaKey || e.ctrlKey) && e.key === 's') { e.preventDefault(); save(f, ed.value); } };
+    Array.prototype.forEach.call(document.querySelectorAll('.mode span'), function (m) { m.onclick = function () { setMode(f, m.getAttribute('data-mode')); }; });
+    $('revert').onclick = function () { dirty[f.name] = false; delete models[f.name]; render(); };
+    $('save').onclick = function () { save(f); };
+    if ($('check')) $('check').onclick = function () { var e = jsonProblem(f.name, $('ed').value); say(e ? 'bad' : 'ok', e || 'Valid JSON.'); };
+    main.oninput = function () { dirty[f.name] = true; var tab = document.querySelector('.tab.on'); if (tab && !tab.querySelector('.dot')) tab.innerHTML = esc(f.name) + '<span class="dot" title="unsaved"></span>'; };
+    main.onkeydown = function (e) { if ((e.metaKey || e.ctrlKey) && e.key === 's') { e.preventDefault(); save(f); } };
+
+    // Structural buttons in the resume form: change the model, re-render.
+    if (useForm) {
+      main.onclick = function (e) {
+        var b = e.target.closest ? e.target.closest('button[data-add-job],button[data-remove-job],button[data-add-sec],button[data-remove-sec]') : null;
+        if (!b) return;
+        e.preventDefault();
+        var m = form.read($('form'), models[f.name]);
+        if (b.hasAttribute('data-add-job')) form.addJob(m, +b.getAttribute('data-add-job'));
+        if (b.hasAttribute('data-remove-job')) { var p = b.getAttribute('data-remove-job').split(':'); if (!confirm('Remove this role?')) return; form.removeJob(m, +p[0], +p[1]); }
+        if (b.hasAttribute('data-add-sec')) form.addSection(m, b.getAttribute('data-add-sec'));
+        if (b.hasAttribute('data-remove-sec')) { if (!confirm('Remove this whole section?')) return; form.removeSection(m, +b.getAttribute('data-remove-sec')); }
+        models[f.name] = m; dirty[f.name] = true; render();
+      };
+    }
   }
 
-  // The same rules api/config enforces, so the red line appears before the
-  // round trip rather than after it.
+  // Switching Form ↔ Text carries the current edits across: form → text
+  // composes; text → form parses. Nothing is saved by switching.
+  function setMode(f, next) {
+    var form = formFor(f.name);
+    if (!form) return;
+    if (mode[f.name] !== 'text' && next === 'text') {
+      var text = currentText(f);
+      mode[f.name] = 'text'; render();
+      if ($('ed')) $('ed').value = text;
+    } else if (next === 'form') {
+      var raw = $('ed') ? $('ed').value : (f.content || '');
+      var problem = jsonProblem(f.name, raw);
+      if (problem) { say('bad', 'Fix the text first: ' + problem); return; }
+      models[f.name] = form.parse(raw);
+      mode[f.name] = 'form'; render();
+    }
+  }
+
   function jsonProblem(name, text) {
     if (name.slice(-5) !== '.json') return null;
     var doc;
@@ -122,10 +201,12 @@
 
   function switchTo(name) {
     if (dirty[current] && !confirm('Unsaved changes in ' + current + '. Switch anyway?')) return;
+    if (dirty[current]) { dirty[current] = false; delete models[current]; }
     current = name; render();
   }
 
-  function save(f, text) {
+  function save(f) {
+    var text = currentText(f);
     var problem = jsonProblem(f.name, text);
     if (problem) { say('bad', problem); return; }
     say('muted', 'Saving…');
@@ -133,7 +214,8 @@
       .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
       .then(function (x) {
         if (!x.ok) { say('bad', 'Not saved: ' + (x.body && x.body.error || 'server refused')); return; }
-        f.content = text; f.updatedAt = x.body.updatedAt; f.by = x.body.by; f.size = new Blob([text]).size; dirty[f.name] = false;
+        f.content = text; f.updatedAt = x.body.updatedAt; f.by = x.body.by; f.size = new Blob([text]).size;
+        dirty[f.name] = false; delete models[f.name];
         render(); say('ok', 'Saved. The pipeline picks this up at its next run.');
       })
       .catch(function () { say('bad', 'Not saved: could not reach the server.'); });
@@ -153,7 +235,7 @@
       $('main').innerHTML = '<div class="banner bad">Could not load the files: ' + esc(e.message || e) + '. Nothing was changed.</div>';
     });
   }
-  window.onbeforeunload = function () { return Object.keys(dirty).some(function (k) { return dirty[k]; }) ? 'Unsaved changes.' : undefined; };
+  window.onbeforeunload = function () { return isDirty() ? 'Unsaved changes.' : undefined; };
   $('signout').onclick = function () { fetch('api/auth/signout', { method: 'POST' }).catch(function () {}).then(function () { location.href = '/login'; }); };
   load();
 })();

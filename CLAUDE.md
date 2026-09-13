@@ -461,6 +461,16 @@ who saved each file in a sidecar `_meta.json`.
 - The form at `/onboard` remains the intake for a new candidate. After that,
   the Settings page is where changes happen; the form's `--diff` report in the
   scheduled run is how a new submission announces itself.
+- **Forms, not just text boxes** (added the same day): `site/config-forms.js`
+  gives `profile.json`, `sources.json` and `resume.md` a structured form —
+  titled sections, one box per field, one-per-line lists, add/remove roles on
+  the resume — with a Form/Text toggle that carries edits across. Saves go
+  through `compose()`, which writes `resume.md` in exactly the shape
+  `resume_doc.parse_resume` reads (em dash, parenthesised dates, `- ` bullets,
+  skills joined with ` • `), and rebuilds the two JSON files from the original
+  so a key the form does not know survives. `tests/config-forms.test.mjs`
+  asserts `compose(parse(x)) === x` on the pipeline shape. The other two
+  `.md` files stay plain text editors.
 - Tests: `tests/test_configsync.py` (push, pull with backup and skip, invalid
   blob copy kept out, prefix isolation, and a scan that the JS names the same
   five files and cap), handler tests for GET/PUT and refusals.
