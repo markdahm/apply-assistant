@@ -166,6 +166,36 @@ def cmd_decisions(args):
     pull_decisions(db_path=args.db)
 
 
+def cmd_config(args):
+    from . import configsync as cs
+    try:
+        if args.push:
+            print("Pushing the five source files to blob...")
+            rep = cs.push_config(by="apply config --push")
+            if rep["missing"]:
+                print("  missing locally: " + ", ".join(rep["missing"]))
+            return 1 if rep["invalid"] else 0
+        if args.pull:
+            print("Pulling the five source files from blob{0}...".format(" (dry run)" if args.dry_run else ""))
+            rep = cs.pull_config(dry_run=args.dry_run)
+            for b in rep["backed_up"]:
+                print("  backup  {0}".format(b))
+            if rep["pulled"] and not args.dry_run:
+                print("  next `apply match` uses the new files")
+            return 1 if rep["invalid"] else 0
+        print("Source files, local vs blob:\n")
+        for r in cs.status():
+            state = ("same" if r["same"] else "DIFFER" if r["local"] and r["remote"]
+                     else "not in blob" if r["local"] else "not local")
+            print("  {0:<20} {1:<12} local {2}  blob {3}  {4}".format(
+                r["name"], state, r["local"] or "—", r["remote"] or "—",
+                ("last saved by " + r["by"]) if r["by"] else ""))
+        print("\n`apply config --pull` takes the blob copies; `--push` sends the local ones.")
+    except RuntimeError as e:
+        print("Can't reach blob: {0}".format(e))
+        return 1
+
+
 def cmd_add(args):
     from .manual import run_add
 
@@ -255,6 +285,15 @@ def cmd_onboard(args):
         if report.get("sources"):
             print("  {0} target employer(s) routed into config/sources.json".format(
                 report["employers"]))
+        # The regenerated files become the canonical copies in blob, so the
+        # Desk's Settings page shows what the pipeline will actually use.
+        # Best effort: a failed push is printed, never fatal to the fetch.
+        try:
+            from .configsync import push_config
+            print("Pushing the five files to blob for the Settings page...")
+            push_config(by="onboard --fetch")
+        except Exception as e:  # noqa: BLE001
+            print("  !! not pushed: {0}  (run `apply config --push` when the token is set)".format(str(e)[:120]))
         print("\nNext: `apply sweep` then `apply match`.")
         return
 
@@ -370,6 +409,13 @@ def main(argv=None):
 
     s = sub.add_parser("decisions", help="pull the candidate's Desk decisions into the DB and show tier vs decision")
     s.set_defaults(func=cmd_decisions)
+
+    s = sub.add_parser("config", help="the five source files: sync with the Desk's Settings page (blob)")
+    g = s.add_mutually_exclusive_group()
+    g.add_argument("--push", action="store_true", help="upload the local files (after a fetch)")
+    g.add_argument("--pull", action="store_true", help="download the blob copies, backing up what they replace")
+    s.add_argument("--dry-run", action="store_true", help="with --pull: report only")
+    s.set_defaults(func=cmd_config)
 
     s = sub.add_parser("letters", help="write a cover letter for each shortlisted job (LLM, cached)")
     s.add_argument("--limit", type=int, default=None, help="cap letters this run")

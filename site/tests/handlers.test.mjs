@@ -42,6 +42,7 @@ const H = {
   callback: require('../api/auth/callback/google.js'),
   signout: require('../api/auth/signout.js'),
   usage: require('../api/usage.js'),
+  config: require('../api/config.js'),
 };
 
 // ── Fake req/res ────────────────────────────────────────────────────────────
@@ -330,6 +331,60 @@ test('api/usage reports a file it could not read instead of dropping it', async 
   assert.equal(body.files.length, 1);
   assert.equal(body.files[0].error, 'HTTP 403');
   assert.equal(body.files[0].rollup, undefined);
+});
+
+// ── api/config: the five source files, per candidate ────────────────────────
+
+test('api/config GET reads the five files under the signed-in candidate\'s prefix only', async () => {
+  const seen = [];
+  globalThis.fetch = async (url) => {
+    seen.push(String(url));
+    if (String(url).includes('/config/resume.md')) return new Response('# resume', { status: 200 });
+    return new Response('', { status: 404 });
+  };
+  const r = await call(H.config, { cookie: await cookieFor('ann@example.com', BEA) });   // forged desk_as again
+  assert.equal(r.statusCode, 200, r.body);
+  const body = r.json();
+  assert.equal(body.candidate, 'ann@example.com');
+  assert.deepEqual(body.files.map((f) => f.name), ['profile.json', 'sources.json', 'resume.md', 'experience_bank.md', 'voice_real.md']);
+  assert.equal(body.files[2].content, '# resume');
+  assert.equal(body.files[0].content, null, 'a file not in the store is null, not empty text');
+  for (const u of seen) assert.ok(u.includes(`/c/${ANN}/config/`), u);
+  assert.ok(!seen.some((u) => u.includes(BEA)), 'read another candidate\'s file');
+});
+
+test('api/config PUT stores a valid file under the candidate and records who saved it', async () => {
+  const r = await call(H.config, {
+    method: 'PUT', cookie: await cookieFor('mark@example.com', BEA),
+    body: { name: 'profile.json', content: JSON.stringify({ candidate: { name: 'Bea' }, preferences: {} }) },
+  });
+  assert.equal(r.statusCode, 200, r.body);
+  const puts = blobCalls.filter((c) => c.op === 'put');
+  assert.deepEqual(puts.map((p) => p.pathname), [`c/${BEA}/config/profile.json`, `c/${BEA}/config/_meta.json`]);
+  assert.equal(JSON.parse(puts[1].body)['profile.json'].by, 'mark@example.com', 'the operator, not the candidate, saved it');
+  assert.equal(puts[0].opts.access, 'private');
+});
+
+test('api/config PUT refuses bad JSON, a profile missing its sections, an unknown name, and non-string content', async () => {
+  const cookie = await cookieFor('ann@example.com');
+  const cases = [
+    [{ name: 'profile.json', content: '{oops' }, /not valid JSON/],
+    [{ name: 'profile.json', content: '{"candidate": {}}' }, /preferences.*object/],   // quotes are JSON-escaped in the body
+    [{ name: 'sources.json', content: '[1,2]' }, /JSON object/],
+    [{ name: '../status.json', content: '{}' }, /not a config file/],
+    [{ name: 'resume.md', content: 42 }, /content must be a string/],
+  ];
+  for (const [body, re] of cases) {
+    const r = await call(H.config, { method: 'PUT', cookie, body });
+    assert.equal(r.statusCode, 400, JSON.stringify(body));
+    assert.match(r.body, re);
+  }
+  assert.deepEqual(blobCalls.filter((c) => c.op === 'put'), [], 'nothing invalid reached the store');
+});
+
+test('api/config refuses the unauthenticated and an operator with nobody picked', async () => {
+  assert.equal((await call(H.config, {})).statusCode, 401);
+  assert.equal((await call(H.config, { cookie: await cookieFor('mark@example.com') })).statusCode, 409);
 });
 
 // ── Where a sign-in lands ───────────────────────────────────────────────────

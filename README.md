@@ -168,6 +168,11 @@ functions:
 
 - `api/auth/google`, `api/auth/callback/google`, `api/auth/signout` — the sign-in
 - `api/me` — who is signed in; operators switch candidates here
+- `api/config` + `/config` — Settings: view and edit the five files the
+  pipeline runs on (profile, sources, resume, experience bank, writing
+  samples), stored per candidate in blob. `apply config --pull` on the
+  pipeline host takes the edits before a run; `--push` sends the local copies
+  after an onboarding fetch
 - `api/usage` + `/ops` — operator-only page of API consumption (Anthropic
   tokens and estimated cost, JSearch requests against the monthly cap,
   Firecrawl requests and failing URLs, blob operations, last run of each

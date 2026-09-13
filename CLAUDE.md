@@ -438,6 +438,33 @@ had been attached to it were both deleted 12 Sep 2026.
 `load_tailored()` still keys by job id alone — safe while each checkout keeps
 its own database, which is the rule.
 
+## The Settings page — the five source files, 12 September 2026
+
+**The source of truth for the candidate's inputs moved.** `config/profile.json`,
+`config/sources.json`, `profile/resume.md`, `profile/experience_bank.md` and
+`profile/voice_real.md` are canonical in blob at `c/<id>/config/<name>`; the
+local copies are a cache. `/config` in the Desk (link "Settings" in both
+mastheads) shows and edits them — a candidate their own, an operator the
+picked candidate's — with the two JSON files validated before save (must
+parse, must be an object, `profile.json` must carry `candidate` and
+`preferences`). `api/config` enforces the same rules server-side and records
+who saved each file in a sidecar `_meta.json`.
+
+- **`apply config --pull`** downloads the blob copies, backs up any local file
+  it replaces (same `.bak` as the form), skips identical files, and refuses a
+  file that fails validation — the local copy stays. `bin/scheduled.sh` runs
+  it first, so an edit on the page takes effect at the next sweep.
+- **`apply config --push`** uploads the local five. `apply onboard --fetch`
+  calls it after regenerating the files, which means **a fresh form submission
+  still overwrites page edits** — by design, and only when an operator runs the
+  fetch by hand. The page says so. `apply config` alone prints local vs blob.
+- The form at `/onboard` remains the intake for a new candidate. After that,
+  the Settings page is where changes happen; the form's `--diff` report in the
+  scheduled run is how a new submission announces itself.
+- Tests: `tests/test_configsync.py` (push, pull with backup and skip, invalid
+  blob copy kept out, prefix isolation, and a scan that the JS names the same
+  five files and cap), handler tests for GET/PUT and refusals.
+
 ## The ops page — API consumption, 12 September 2026
 
 `/ops` is what an operator lands on after a plain sign-in (a candidate never

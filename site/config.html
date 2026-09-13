@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>The Desk — Settings</title>
+<style>
+  :root { --paper:#F4EFE4; --card:#FBF8F1; --ink:#221E1A; --muted:#6B6258; --faint:#9A9082;
+          --rule:#D8CFBE; --green:#2F4A3C; --gold:#C08A2D; --red:#B4472E; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--paper); color:var(--ink); font:15px/1.5 'Hanken Grotesk',-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+  header { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 24px;
+           border-bottom:1px solid var(--rule); background:rgba(244,239,228,.95); position:sticky; top:0; z-index:2; }
+  header .brand { font-weight:600; font-size:20px; letter-spacing:-.02em; }
+  header .brand small { font-weight:500; color:var(--muted); font-size:12px; letter-spacing:.08em; text-transform:uppercase; margin-left:10px; }
+  header nav { display:flex; gap:10px; align-items:center; font-size:12px; color:var(--muted); }
+  header nav a, header nav span[role=button] { color:var(--ink); text-decoration:none; border:1px solid var(--rule); border-radius:4px; padding:6px 10px; cursor:pointer; text-transform:uppercase; letter-spacing:.06em; font-size:11px; }
+  main { max-width:1100px; margin:0 auto; padding:22px 24px 60px; }
+  .banner { border-radius:6px; padding:10px 14px; margin-bottom:16px; font-size:14px; }
+  .banner.warn { background:#F3EAD3; color:#5A4A1E; border:1px solid #E1CF9A; }
+  .banner.bad  { background:#F6DFD8; color:#5A2418; border:1px solid #E7B9AD; }
+  .banner.info { background:#EEE9DC; color:var(--muted); border:1px solid var(--rule); }
+  .tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
+  .tab { border:1px solid var(--rule); border-radius:4px; padding:7px 12px; cursor:pointer; font-size:13px; background:var(--card); color:var(--muted); }
+  .tab.on { background:var(--ink); color:var(--paper); border-color:var(--ink); }
+  .tab .dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--gold); margin-left:6px; vertical-align:middle; }
+  .card { background:var(--card); border:1px solid var(--rule); border-radius:8px; padding:16px 18px; }
+  .meta { display:flex; justify-content:space-between; gap:12px; align-items:baseline; margin-bottom:8px; }
+  .meta h2 { font-size:13px; letter-spacing:.06em; text-transform:uppercase; font-weight:600; }
+  .meta .faint { color:var(--faint); font-size:12px; }
+  textarea { width:100%; min-height:520px; resize:vertical; font:13px/1.45 ui-monospace,Menlo,Consolas,monospace; color:var(--ink);
+             background:#fff; border:1px solid var(--rule); border-radius:6px; padding:12px; tab-size:2; }
+  textarea:focus { outline:none; border-color:var(--green); }
+  .row { display:flex; gap:10px; align-items:center; margin-top:10px; flex-wrap:wrap; }
+  button { font:inherit; font-size:13px; font-weight:600; border:1px solid var(--rule); border-radius:6px; padding:8px 14px; cursor:pointer; background:var(--card); color:var(--ink); }
+  button.primary { background:var(--green); color:#fff; border-color:var(--green); }
+  button[disabled] { opacity:.5; cursor:default; }
+  .msg { font-size:13px; }
+  .msg.bad { color:var(--red); } .msg.ok { color:var(--green); } .msg.muted { color:var(--muted); }
+  .what { color:var(--muted); font-size:13px; margin-bottom:10px; }
+  .empty { padding:40px; text-align:center; color:var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">The Desk <small>Settings</small></div>
+  <nav>
+    <span id="who" class="muted"></span>
+    <a href="/desk">Open the Desk</a>
+    <a href="/onboard">Onboarding form</a>
+    <span role="button" id="signout">Sign out</span>
+  </nav>
+</header>
+<main id="main"><div class="empty">Loading…</div></main>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+  var ago = function (ms) { if (!ms) return 'never'; var h = (Date.now() - ms) / 36e5; if (h < 1) return Math.round(h * 60) + ' min ago'; if (h < 48) return Math.round(h) + ' h ago'; return Math.round(h / 24) + ' days ago'; };
+
+  // What each file is for, in the candidate's terms. These match the pipeline's
+  // own reading of them — facts only from the resume and experience bank,
+  // register only from the writing samples.
+  var ABOUT = {
+    'profile.json':       'What the filter and the scorer know about you: target titles, skills, locations, pay floor, exclusions. JSON — it must keep its "candidate" and "preferences" sections.',
+    'sources.json':       'Where the sweep looks: employers by careers system, and the JSearch phrases used word for word. JSON.',
+    'resume.md':          'Your resume as the tailor reads it. Every tailored bullet must trace back to a line here; nothing gets invented. Headings and bullets matter.',
+    'experience_bank.md': 'Older roles and facts that are not on the resume. Cover letters may cite facts from here.',
+    'voice_real.md':      'Your real writing — emails, notes. Used only for tone, never for facts.'
+  };
+
+  var files = [], current = null, dirty = {};
+
+  function render() {
+    var main = $('main');
+    if (!files.length) { main.innerHTML = '<div class="banner bad">No files came back.</div>'; return; }
+    var missing = files.filter(function (f) { return f.content == null; });
+    var h = '';
+    if (missing.length) {
+      h += '<div class="banner warn">' + missing.length + ' of 5 files are not in the store yet, so there is nothing to edit for them. On the pipeline machine run <span class="mono">apply config --push</span> once; after that, every save here is what the next run uses.</div>';
+    }
+    h += '<div class="banner info">Saving here changes what the pipeline runs on at its next pull. Re-running the onboarding fetch regenerates all five from a NEW form submission and overwrites these — that only happens when an operator does it by hand.</div>';
+    h += '<div class="tabs">' + files.map(function (f) {
+      return '<span class="tab' + (f.name === current ? ' on' : '') + '" data-name="' + esc(f.name) + '">' + esc(f.name) + (dirty[f.name] ? '<span class="dot" title="unsaved"></span>' : '') + '</span>';
+    }).join('') + '</div>';
+    var f = files.find(function (x) { return x.name === current; });
+    h += '<div class="card">'
+      + '<div class="meta"><h2>' + esc(f.name) + '</h2><span class="faint">' + (f.content == null ? 'not in the store yet' : (f.size + ' bytes · last saved ' + ago(f.updatedAt) + (f.by ? ' by ' + esc(f.by) : ''))) + '</span></div>'
+      + '<div class="what">' + esc(ABOUT[f.name] || '') + '</div>'
+      + '<textarea id="ed" spellcheck="false"' + (f.content == null ? ' disabled placeholder="Not published yet."' : '') + '>' + esc(f.content == null ? '' : f.content) + '</textarea>'
+      + '<div class="row">'
+      + (f.name.slice(-5) === '.json' ? '<button id="check">Check JSON</button>' : '')
+      + '<button id="save" class="primary"' + (f.content == null ? ' disabled' : '') + '>Save ' + esc(f.name) + '</button>'
+      + '<button id="revert">Revert</button>'
+      + '<span id="msg" class="msg muted"></span>'
+      + '</div></div>';
+    main.innerHTML = h;
+    Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (t) { t.onclick = function () { switchTo(t.getAttribute('data-name')); }; });
+    var ed = $('ed');
+    ed.oninput = function () { dirty[current] = ed.value !== (f.content || ''); var tab = document.querySelector('.tab.on'); if (tab) tab.innerHTML = esc(current) + (dirty[current] ? '<span class="dot" title="unsaved"></span>' : ''); };
+    if ($('check')) $('check').onclick = function () { var e = jsonProblem(current, ed.value); say(e ? 'bad' : 'ok', e || 'Valid JSON.'); };
+    $('revert').onclick = function () { ed.value = f.content || ''; dirty[current] = false; render(); };
+    $('save').onclick = function () { save(f, ed.value); };
+    ed.onkeydown = function (e) { if ((e.metaKey || e.ctrlKey) && e.key === 's') { e.preventDefault(); save(f, ed.value); } };
+  }
+
+  // The same rules api/config enforces, so the red line appears before the
+  // round trip rather than after it.
+  function jsonProblem(name, text) {
+    if (name.slice(-5) !== '.json') return null;
+    var doc;
+    try { doc = JSON.parse(text); } catch (e) { return 'Not valid JSON: ' + e.message; }
+    if (!doc || typeof doc !== 'object' || Array.isArray(doc)) return 'Must be a JSON object.';
+    if (name === 'profile.json') {
+      if (!doc.candidate || typeof doc.candidate !== 'object') return 'profile.json needs a "candidate" section.';
+      if (!doc.preferences || typeof doc.preferences !== 'object') return 'profile.json needs a "preferences" section.';
+    }
+    return null;
+  }
+  function say(kind, text) { var m = $('msg'); if (!m) return; m.className = 'msg ' + kind; m.textContent = text; }
+
+  function switchTo(name) {
+    if (dirty[current] && !confirm('Unsaved changes in ' + current + '. Switch anyway?')) return;
+    current = name; render();
+  }
+
+  function save(f, text) {
+    var problem = jsonProblem(f.name, text);
+    if (problem) { say('bad', problem); return; }
+    say('muted', 'Saving…');
+    fetch('api/config', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: f.name, content: text }) })
+      .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
+      .then(function (x) {
+        if (!x.ok) { say('bad', 'Not saved: ' + (x.body && x.body.error || 'server refused')); return; }
+        f.content = text; f.updatedAt = x.body.updatedAt; f.by = x.body.by; f.size = new Blob([text]).size; dirty[f.name] = false;
+        render(); say('ok', 'Saved. The pipeline picks this up at its next run.');
+      })
+      .catch(function () { say('bad', 'Not saved: could not reach the server.'); });
+  }
+
+  function load() {
+    fetch('api/me', { cache: 'no-store' }).then(function (r) {
+      if (r.status === 401) { location.href = '/login?next=' + encodeURIComponent('/config'); return null; }
+      return r.ok ? r.json() : null;
+    }).then(function (me) {
+      if (!me) { $('main').innerHTML = '<div class="banner bad">Could not confirm who is signed in.</div>'; return; }
+      $('who').textContent = me.email + (me.role === 'operator' && me.candidate ? ' · editing ' + me.candidate.email : '');
+      if (me.role === 'operator' && !me.candidate) { $('main').innerHTML = '<div class="banner warn">No candidate selected — pick one on <a href="/desk">the Desk</a> first.</div>'; return; }
+      return fetch('api/config', { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error('api/config ' + r.status); return r.json(); })
+        .then(function (d) { files = d.files; current = current || files[0].name; render(); });
+    }).catch(function (e) {
+      $('main').innerHTML = '<div class="banner bad">Could not load the files: ' + esc(e.message || e) + '. Nothing was changed.</div>';
+    });
+  }
+  window.onbeforeunload = function () { return Object.keys(dirty).some(function (k) { return dirty[k]; }) ? 'Unsaved changes.' : undefined; };
+  $('signout').onclick = function () { fetch('api/auth/signout', { method: 'POST' }).catch(function () {}).then(function () { location.href = '/login'; }); };
+  load();
+})();
+</script>
+</body>
+</html>

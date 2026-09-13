@@ -358,6 +358,7 @@
           }).join('') + '</select>';
       h += '<a class="out" href="/ops" style="text-decoration:none">Usage</a>';
     }
+    if (ME.candidate) h += '<a class="out" href="/config" style="text-decoration:none">Settings</a>';
     h += '<span class="out" onclick="signOut()">Sign out</span>';
     el.innerHTML = h;
     var sel = document.getElementById('as');

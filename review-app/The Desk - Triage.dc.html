@@ -437,6 +437,12 @@ class Component extends DCLogic {
       ops.style.cssText='color:#6B6258;text-decoration:none;text-transform:uppercase;letter-spacing:0.08em;border:1px solid #D8CFBE;border-radius:4px;padding:5px 9px;';
       el.appendChild(ops);
     }
+    // Everyone gets Settings: the five source files the pipeline runs on.
+    if(me.candidate){
+      const cfg=document.createElement('a'); cfg.textContent='Settings'; cfg.href='/config';
+      cfg.style.cssText='color:#6B6258;text-decoration:none;text-transform:uppercase;letter-spacing:0.08em;border:1px solid #D8CFBE;border-radius:4px;padding:5px 9px;';
+      el.appendChild(cfg);
+    }
     const out=document.createElement('span'); out.textContent='Sign out'; out.setAttribute('role','button'); out.tabIndex=0;
     out.style.cssText='cursor:pointer;text-transform:uppercase;letter-spacing:0.08em;border:1px solid #D8CFBE;border-radius:4px;padding:5px 9px;';
     out.onclick=()=>{ fetch('api/auth/signout',{method:'POST'}).catch(()=>{}).then(()=>{ location.href='/login'; }); };

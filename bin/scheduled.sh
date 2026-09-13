@@ -79,7 +79,14 @@ else
   rm -f "$PENDING"
 fi
 
-# --- 2. Sourcing. Safe to repeat; nothing here overwrites the profile. -------
+# --- 2. Take any edits made on the Desk's Settings page. -------------------
+# The five source files live in blob now; the local copies are a cache. A
+# pull backs up whatever it replaces, refuses a file that does not parse, and
+# is a no-op when nothing changed.
+step "config --pull"
+"$PY" -m apply_assistant.cli config --pull || echo "!! config pull failed (running on the local copies)"
+
+# --- 3. Sourcing. Safe to repeat; nothing here overwrites the profile. -------
 step "sweep"
 "$PY" -m apply_assistant.cli sweep || echo "!! sweep failed"
 

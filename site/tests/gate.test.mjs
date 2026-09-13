@@ -21,7 +21,7 @@ const read = (p) => readFileSync(site(p), 'utf8');
 const code = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"])\/\/[^\n]*/g, '$1');
 
 // Every function in api/ that reads or writes candidate data.
-const DATA_HANDLERS = ['api/jobs.js', 'api/status.js', 'api/inbox.js', 'api/letter.js', 'api/onboard.js'];
+const DATA_HANDLERS = ['api/jobs.js', 'api/status.js', 'api/inbox.js', 'api/letter.js', 'api/onboard.js', 'api/config.js'];
 
 const ENV = { DESK_OPERATORS: 'mark@example.com', DESK_CANDIDATES: 'ann@example.com', DESK_SESSION_SECRET: 's3cret' };
 const cookieFor = async (email) => `${SESSION_COOKIE}=${await signSession(ENV.DESK_SESSION_SECRET, email)}`;
@@ -188,6 +188,16 @@ test('the ops page is operator-only end to end', () => {
   assert.ok(!/requireCandidate/.test(api), 'usage is not per-candidate data');
   // Never an empty-looking success on a read failure.
   assert.match(ops, /not a report of zero|nothing having been spent/, 'the page must distinguish "could not read" from "zero"');
+});
+
+test('the settings page validates before it saves, and saves only through api/config', () => {
+  const cfg = code(read('config.html'));
+  assert.match(cfg, /fetch\('api\/me'/);
+  assert.match(cfg, /fetch\('api\/config'/);
+  assert.match(cfg, /method: 'PUT'/);
+  assert.match(cfg, /needs a "candidate" section/, 'the page must pre-check profile.json the way the API does');
+  assert.match(cfg, /overwrites these/, 'the page must say that a fresh onboarding fetch replaces page edits');
+  assert.ok(!/api\/onboard/.test(cfg.replace(/href="\/onboard"/g, '')), 'settings must not write through the onboarding intake');
 });
 
 test('the test directory itself is not deployed, and this suite is not empty', () => {
