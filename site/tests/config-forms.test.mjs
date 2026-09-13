@@ -154,6 +154,75 @@ test('sources: compose(parse(x)) round-trips the pipeline\'s own file shape', ()
   assert.deepEqual(JSON.parse(once), JSON.parse(SOURCES));
 });
 
+// ── Settings → onboarding form ──────────────────────────────────────────────
+
+const FILES = [
+  { name: 'profile.json', content: JSON.stringify({
+    candidate: { name: 'Ann Example', summary: 'Auditor.', titles: ['QA Lead', 'Food Safety'], skills: ['HACCP', 'GMPs'],
+      years_experience: 5, seniority: 'mid', work_authorization: 'US citizen' },
+    preferences: { target_role_keywords: ['quality assurance', 'food safety'], exclude_role_keywords: ['intern'],
+      seniority_floor: 'junior', seniority_ceiling: 'director', locations: ['gilroy', 'salinas'], remote_ok: true,
+      comp_floor: 65000, exclude_keywords: ['clinical'], needs_sponsorship: false } }) },
+  { name: 'sources.json', content: JSON.stringify({ greenhouse: ['stripe'], lever: [], ashby: ['acme'], workable: [], smartrecruiters: [],
+    workday: ['tenant/site'], firecrawl_boards: [{ url: 'https://farm.example/careers', name: 'Farm' }], jsearch_queries: ['food safety in Salinas, CA', 'HACCP in Gilroy, CA'] }) },
+  { name: 'resume.md', content: RESUME },
+  { name: 'experience_bank.md', content: '# Experience bank\n\nOffice Administrator\nThrive Motors\n' },
+  { name: 'voice_real.md', content: '# Real writing voice\n\nHello Matthew,\n\nJust following up.\n' },
+];
+
+test('toPayload turns the five files into the form\'s answers', () => {
+  const p = F.toPayload(FILES);
+  assert.equal(p.name, 'Ann Example');
+  assert.equal(p.email, 'ann@example.com');
+  assert.equal(p.phone, '4085551234');
+  assert.equal(p.home_location, 'Gilroy, CA');
+  assert.equal(p.titles, 'QA Lead, Food Safety');
+  assert.equal(p.target_role_keywords, 'quality assurance, food safety', 'the list the form used to lose');
+  assert.equal(p.skills, 'HACCP, GMPs');
+  assert.equal(p.years_experience, '5');
+  assert.equal(p.locations, 'gilroy, salinas');
+  assert.equal(p.remote_ok, true);
+  assert.equal(p.comp_floor, '65000');
+  assert.equal(p.exclude_keywords, 'clinical');
+  assert.equal(p.jsearch_queries, 'food safety in Salinas, CA\nHACCP in Gilroy, CA', 'phrases stay one per line — they contain commas');
+  assert.equal(p.voice, 'Hello Matthew,\n\nJust following up.', 'the heading the fetch adds is stripped');
+  assert.equal(p.experience_bank, 'Office Administrator\nThrive Motors');
+});
+
+test('toPayload hands the form a resume body WITHOUT the summary and skills sections', () => {
+  // save_all() adds "## Summary" and "## Skills" itself from the profile
+  // fields, so leaving them in the body would produce each twice.
+  const p = F.toPayload(FILES);
+  assert.ok(!/## Summary/.test(p.resume), 'summary duplicated');
+  assert.ok(!/## Skills/.test(p.resume), 'skills duplicated');
+  assert.ok(!/\*\*Ann Example\*\*/.test(p.resume), 'name line duplicated');
+  assert.match(p.resume, /^## Experience\n### Food Safety Quality Assurance Coordinator — Example Farms \(02\/2025 – Present\)\n- /);
+  assert.match(p.resume, /## Education\nSan José State University/);
+});
+
+test('toPayload rebuilds employer rows the router will send back to the same feeds', () => {
+  const p = F.toPayload(FILES);
+  assert.deepEqual(p.employers, [
+    { name: 'stripe', url: 'https://boards.greenhouse.io/stripe' },
+    { name: 'acme', url: 'https://jobs.ashbyhq.com/acme' },
+    { name: 'tenant/site', url: 'https://tenant.wd5.myworkdayjobs.com/site' },
+    { name: 'Farm', url: 'https://farm.example/careers' },
+  ]);
+});
+
+test('contactParts sorts a contact line by shape, whatever the order', () => {
+  assert.deepEqual(F.contactParts('Gilroy, CA | ann@example.com | (408) 555-1234'), { email: 'ann@example.com', phone: '(408) 555-1234', home_location: 'Gilroy, CA' });
+  assert.deepEqual(F.contactParts(''), { email: '', phone: '', home_location: '' });
+  assert.deepEqual(F.contactParts('ann@example.com'), { email: 'ann@example.com', phone: '', home_location: '' });
+});
+
+test('toPayload copes with missing or broken files rather than throwing', () => {
+  const p = F.toPayload([{ name: 'profile.json', content: '{oops' }, { name: 'resume.md', content: null }]);
+  assert.equal(p.name, '');
+  assert.equal(p.resume, '');
+  assert.deepEqual(p.employers, []);
+});
+
 test('the page loads the forms script and no other file ships the form logic', () => {
   const page = readFileSync(new URL('../config.html', import.meta.url), 'utf8');
   assert.match(page, /<script src="\.\/config-forms\.js"><\/script>/);

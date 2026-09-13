@@ -62,6 +62,15 @@
   button.btn[disabled] { opacity:.5; cursor:default; }
   .msg { font-size:13px; } .msg.bad { color:var(--red); } .msg.ok { color:var(--green); } .msg.muted { color:var(--muted); }
   .empty { padding:40px; text-align:center; color:var(--muted); }
+  /* onboarding card */
+  .onb { display:flex; gap:18px; align-items:center; justify-content:space-between; flex-wrap:wrap; margin-bottom:16px; }
+  .onb .lede { font-size:15px; font-weight:600; }
+  .onb .state { color:var(--muted); font-size:13px; margin-top:3px; }
+  .onb .state.pending { color:#5A4A1E; }
+  .onb .btns { display:flex; gap:8px; flex-wrap:wrap; }
+  .onb a.go { display:inline-block; background:var(--ink); color:var(--paper); text-decoration:none; font-weight:600; font-size:14px; padding:10px 16px; border-radius:6px; white-space:nowrap; }
+  .onb a.go.ghost { background:var(--card); color:var(--ink); border:1px solid var(--rule); }
+  .onb .mono { font-family:ui-monospace,Menlo,monospace; font-size:12px; background:#EEE9DC; padding:1px 5px; border-radius:3px; }
 </style>
 </head>
 <body>
@@ -89,7 +98,31 @@
     'voice_real.md':      'Your real writing — emails, notes. Used only for tone, never for facts.'
   };
 
-  var files = [], current = null, dirty = {}, mode = {}, models = {};
+  var files = [], current = null, dirty = {}, mode = {}, models = {}, onboard = null, me = null;
+
+  // The onboarding form is the guided way to fill all five files at once —
+  // the right tool for a first pass or a big rewrite, where these boxes are
+  // for adjustments. Submitting it does NOT change the files by itself: it
+  // parks a submission, and an operator applies it with `apply onboard
+  // --fetch`, which regenerates all five and replaces edits made here. The
+  // card says which of those states the newest submission is in, worked out
+  // from the submission time against the files' last save by a fetch.
+  function onboardingCard() {
+    var applied = files.filter(function (f) { return f.by && f.by.indexOf('onboard --fetch') === 0 && f.updatedAt; })
+      .map(function (f) { return f.updatedAt; }).sort().pop() || 0;
+    var latest = onboard && onboard.latest ? new Date(onboard.latest).getTime() : 0;
+    var state, cls = '';
+    if (onboard === null) state = 'Could not read the submission queue.';
+    else if (!onboard.count) state = 'No form submission yet. The form is the fastest way to fill all five files at once.';
+    else if (latest > applied) { cls = 'pending'; state = 'Newest submission ' + ago(latest) + ' has not been applied yet' + (me && me.role === 'operator' ? ' — run <span class="mono">apply onboard --fetch</span> on the pipeline machine, which regenerates all five files and replaces edits made here.' : '. An operator applies it; when they do, it replaces edits made here.'); }
+    else state = onboard.count + ' submission' + (onboard.count === 1 ? '' : 's') + ' so far; the newest (' + ago(latest) + ') has been applied. Submitting the form again starts that cycle over.';
+    var haveFiles = files.some(function (f) { return f.content != null; });
+    return '<div class="card onb"><div><div class="lede">Onboarding form</div><div class="state ' + cls + '">' + state + '</div></div>'
+      + '<div class="btns">'
+      + (haveFiles ? '<a class="go" href="/onboard?from=settings">Open the form with these settings</a>' : '')
+      + '<a class="go ghost" href="/onboard">Open a blank form</a>'
+      + '</div></div>';
+  }
 
   function formFor(name) { return (window.DeskForms || {})[name] || null; }
   function isDirty() { return Object.keys(dirty).some(function (k) { return dirty[k]; }); }
@@ -116,7 +149,8 @@
     if (missing.length) {
       h += '<div class="banner warn">' + missing.length + ' of 5 files are not in the store yet. On the pipeline machine run <span class="mono">apply config --push</span> once; after that, every save here is what the next run uses.</div>';
     }
-    h += '<div class="banner info">Saving here changes what the pipeline runs on at its next pull. Re-running the onboarding fetch regenerates all five from a NEW form submission and overwrites these — that only happens when an operator does it by hand.</div>';
+    h += onboardingCard();
+    h += '<div class="banner info">Saving here changes what the pipeline runs on at its next pull. Applying a NEW form submission regenerates all five files and overwrites these — that only happens when an operator does it by hand.</div>';
     h += '<div class="tabs">' + files.map(function (f) {
       return '<span class="tab' + (f.name === current ? ' on' : '') + '" data-name="' + esc(f.name) + '">' + esc(f.name) + (dirty[f.name] ? '<span class="dot" title="unsaved"></span>' : '') + '</span>';
     }).join('') + '</div>';
@@ -225,12 +259,18 @@
     fetch('api/me', { cache: 'no-store' }).then(function (r) {
       if (r.status === 401) { location.href = '/login?next=' + encodeURIComponent('/config'); return null; }
       return r.ok ? r.json() : null;
-    }).then(function (me) {
+    }).then(function (m) {
+      me = m;
       if (!me) { $('main').innerHTML = '<div class="banner bad">Could not confirm who is signed in.</div>'; return; }
       $('who').textContent = me.email + (me.role === 'operator' && me.candidate ? ' · editing ' + me.candidate.email : '');
       if (me.role === 'operator' && !me.candidate) { $('main').innerHTML = '<div class="banner warn">No candidate selected — pick one on <a href="/desk">the Desk</a> first.</div>'; return; }
-      return fetch('api/config', { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error('api/config ' + r.status); return r.json(); })
-        .then(function (d) { files = d.files; current = current || files[0].name; render(); });
+      // The submission queue is read-only here and a nicety: if it cannot be
+      // read the card says so and the rest of the page still works.
+      var queue = fetch('api/onboard', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
+      return Promise.all([
+        fetch('api/config', { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error('api/config ' + r.status); return r.json(); }),
+        queue,
+      ]).then(function (res) { files = res[0].files; onboard = res[1]; current = current || files[0].name; render(); });
     }).catch(function (e) {
       $('main').innerHTML = '<div class="banner bad">Could not load the files: ' + esc(e.message || e) + '. Nothing was changed.</div>';
     });

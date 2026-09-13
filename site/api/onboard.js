@@ -48,7 +48,7 @@ function readBody(req) {
 // to `onboard.py`, add it here in the same change.
 const TEXT_FIELDS = {
   name: 200, email: 200, phone: 60, home_location: 200, summary: 2000,
-  titles: 1000, skills: 2000, years_experience: 10, seniority: 40,
+  titles: 1000, target_role_keywords: 2000, skills: 2000, years_experience: 10, seniority: 40,
   work_authorization: 300, locations: 4000, seniority_floor: 40,
   seniority_ceiling: 40, comp_floor: 20, exclude_role_keywords: 2000,
   exclude_keywords: 2000, resume: 120000, voice: 60000, experience_bank: 60000,

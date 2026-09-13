@@ -283,5 +283,97 @@
     removeSection: function (m, si) { m.sections.splice(si, 1); return m; },
   };
 
-  root.DeskForms = { 'profile.json': profileForm, 'sources.json': sourcesForm, 'resume.md': resumeForm, _lines: lines };
+  // ── Settings → onboarding form ───────────────────────────────────────────
+  // The five files, turned back into the answers the onboarding form asks for,
+  // so the form can be re-sent without losing what was tuned on Settings. The
+  // inverse of apply_assistant/onboard.save_all: tests/test_settings_roundtrip.py
+  // feeds this output through the real build_profile / build_sources /
+  // save_all and checks the files come back the same.
+
+  var ATS_URL = {
+    greenhouse: function (v) { return 'https://boards.greenhouse.io/' + v; },
+    lever: function (v) { return 'https://jobs.lever.co/' + v; },
+    ashby: function (v) { return 'https://jobs.ashbyhq.com/' + v; },
+    workable: function (v) { return 'https://apply.workable.com/' + v; },
+    smartrecruiters: function (v) { return 'https://careers.smartrecruiters.com/' + v; },
+    // The value is "tenant/site"; the wdN host number is unknown from here and
+    // does not affect how the URL is routed back.
+    workday: function (v) { var p = String(v).split('/'); return /^https?:/.test(v) ? v : 'https://' + p[0] + '.wd5.myworkdayjobs.com/' + (p[1] || ''); },
+  };
+
+  function contactParts(line) {
+    var out = { email: '', phone: '', home_location: '' };
+    String(line || '').split('|').map(function (x) { return x.trim(); }).filter(Boolean).forEach(function (part) {
+      if (!out.email && part.indexOf('@') > 0) out.email = part;
+      else if (!out.phone && (part.replace(/\D/g, '').length >= 7) && !/[a-z]{3}/i.test(part)) out.phone = part;
+      else if (!out.home_location) out.home_location = part;
+    });
+    return out;
+  }
+
+  function stripHeading(text) {
+    var t = String(text || '').replace(/^\s*#\s[^\n]*\n+/, '');
+    return t.trim();
+  }
+
+  // save_all() writes the resume as: front matter, "## Summary" from the
+  // profile summary, the pasted body, then "## Skills" from the profile
+  // skills. So the body handed back to the form is everything EXCEPT the name
+  // and contact lines and those two sections — or they would come out twice.
+  function resumeBodyForForm(text) {
+    var m = resumeForm.parse(text);
+    var keep = m.sections.filter(function (s) { return !/^(summary|skills)$/i.test(s.title); });
+    return resumeForm.compose({ name: '', contact: '', sections: keep }).trim();
+  }
+
+  function employersFromSources(doc) {
+    var out = [];
+    ATS.forEach(function (k) {
+      (doc[k] || []).forEach(function (v) { out.push({ name: String(v), url: ATS_URL[k](String(v)) }); });
+    });
+    (doc.firecrawl_boards || []).forEach(function (b) { if (b && b.url) out.push({ name: b.name && b.name !== b.url ? b.name : '', url: b.url }); });
+    return out;
+  }
+
+  function toPayload(files) {
+    var by = {};
+    (files || []).forEach(function (f) { by[f.name] = f.content; });
+    var prof = {}, src = {};
+    try { prof = JSON.parse(by['profile.json'] || '{}') || {}; } catch (e) { prof = {}; }
+    try { src = JSON.parse(by['sources.json'] || '{}') || {}; } catch (e) { src = {}; }
+    var c = prof.candidate || {}, p = prof.preferences || {};
+    var resume = resumeForm.parse(by['resume.md'] || '');
+    var contact = contactParts(resume.contact);
+    var csv = function (arr) { return (arr || []).join(', '); };
+    return {
+      name: c.name || resume.name || '',
+      email: contact.email, phone: contact.phone, home_location: contact.home_location,
+      summary: c.summary || '',
+      titles: csv(c.titles),
+      target_role_keywords: csv(p.target_role_keywords),
+      skills: csv(c.skills),
+      years_experience: c.years_experience == null ? '' : String(c.years_experience),
+      seniority: c.seniority || '',
+      work_authorization: c.work_authorization || '',
+      needs_sponsorship: !!p.needs_sponsorship,
+      locations: csv(p.locations),
+      remote_ok: !!p.remote_ok,
+      seniority_floor: p.seniority_floor || '',
+      seniority_ceiling: p.seniority_ceiling || '',
+      comp_floor: p.comp_floor == null ? '' : String(p.comp_floor),
+      exclude_role_keywords: csv(p.exclude_role_keywords),
+      exclude_keywords: csv(p.exclude_keywords),
+      jsearch_queries: (src.jsearch_queries || []).join('\n'),
+      resume: resumeBodyForForm(by['resume.md'] || ''),
+      voice: stripHeading(by['voice_real.md']),
+      experience_bank: stripHeading(by['experience_bank.md']),
+      employers: employersFromSources(src),
+    };
+  }
+
+  root.DeskForms = {
+    'profile.json': profileForm, 'sources.json': sourcesForm, 'resume.md': resumeForm,
+    toPayload: toPayload, contactParts: contactParts, resumeBodyForForm: resumeBodyForForm,
+    employersFromSources: employersFromSources, _lines: lines,
+  };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

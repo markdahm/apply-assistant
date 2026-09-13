@@ -197,7 +197,15 @@ test('the settings page validates before it saves, and saves only through api/co
   assert.match(cfg, /method: 'PUT'/);
   assert.match(cfg, /needs a "candidate" section/, 'the page must pre-check profile.json the way the API does');
   assert.match(cfg, /overwrites these/, 'the page must say that a fresh onboarding fetch replaces page edits');
-  assert.ok(!/api\/onboard/.test(cfg.replace(/href="\/onboard"/g, '')), 'settings must not write through the onboarding intake');
+  // The page READS the submission queue to say whether the newest submission
+  // has been applied, and links to the form. It must never write a submission
+  // itself — that is the form's job, and the fetch that applies it is the
+  // operator's.
+  assert.match(cfg, /fetch\('api\/onboard',\s*\{\s*cache/, 'the onboarding card reads the queue');
+  assert.ok(!/fetch\('api\/onboard',\s*\{[^}]*method/.test(cfg), 'settings must not write through the onboarding intake');
+  assert.match(cfg, /href="\/onboard\?from=settings"[^>]*>Open the form with these settings/, 'the card must offer the form pre-filled from Settings');
+  assert.match(cfg, /href="\/onboard"[^>]*>Open a blank form/, 'and a blank one');
+  assert.match(cfg, /has not been applied yet/, 'a pending submission must be named as pending, not shown as applied');
 });
 
 test('the test directory itself is not deployed, and this suite is not empty', () => {

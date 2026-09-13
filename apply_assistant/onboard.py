@@ -454,6 +454,7 @@ PAGE = r"""<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>apply-assistant · onboarding</title>
+%%FORMS_SCRIPT%%
 <style>
   :root { --bg:#f6f7f9; --card:#fff; --ink:#1c2530; --muted:#6b7480;
           --line:#e2e6eb; --accent:#2f6fed; --accent-ink:#fff; --ok:#127a4a; }
@@ -540,6 +541,9 @@ PAGE = r"""<!doctype html>
       <textarea name="summary" placeholder="e.g. Operations manager, 8 years, scaling support and logistics teams at Bay Area startups."></textarea>
       <label>Job titles you're targeting <span class="opt">· comma-separated</span></label>
       <input type="text" name="titles" placeholder="Operations Manager, Program Manager, Business Operations">
+      <label>Role words the filter matches on <span class="opt">· optional, comma-separated</span></label>
+      <p class="hint" style="margin:0 0 6px">A posting's title must contain one of these to get through. Leave blank and your job titles are used. If you have tuned this list on the Settings page it comes back here when you open the form from there.</p>
+      <input type="text" name="target_role_keywords" placeholder="quality assurance, food safety, compliance analyst">
       <label>Key skills <span class="opt">· comma-separated</span></label>
       <p class="hint" style="margin:0 0 6px">These are matched word-for-word against real job postings, so use the words postings actually use — "roadmap", "cross-functional", "go-to-market". Tools you happen to know, or personal shorthand, will never appear in a posting and will drag every score down. Six to eight is about right.</p>
       <input type="text" name="skills" placeholder="Product strategy, roadmap, cross-functional, go-to-market, user research, A/B testing">
@@ -817,7 +821,26 @@ PAGE = r"""<!doctype html>
     counts();
   }
 
-  if(HOSTED){
+  // Two ways the hosted form pre-fills. Opened from the Settings page
+  // (?from=settings) it takes the five files the pipeline actually runs on and
+  // turns them back into answers, so a list tuned on Settings is not lost when
+  // the form is re-sent. Otherwise it takes the newest submission, so a
+  // returning candidate refines what they wrote.
+  var FROM_SETTINGS = HOSTED && /[?&]from=settings(?:&|$)/.test(location.search);
+  if(HOSTED && FROM_SETTINGS && window.DeskForms && window.DeskForms.toPayload){
+    fetch('api/config',{cache:'no-store'})
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(d){
+        if(!d || !d.files) return;
+        fillForm(window.DeskForms.toPayload(d.files));
+        document.getElementById('editing').innerHTML =
+          'Filled in from your Settings — review it, then send. Sending creates a new submission; an operator applies it, which rebuilds all five files from these answers. '
+          + '<span id="startFresh" role="button" tabindex="0" style="cursor:pointer;text-decoration:underline;margin-left:6px;">Start over instead</span>';
+        document.getElementById('editing').classList.remove('hidden');
+        wireStartFresh();
+      })
+      .catch(function(){ /* pre-fill is a convenience — a blank form still works */ });
+  } else if(HOSTED){
     fetch('api/onboard?include=payload',{cache:'no-store'})
       .then(function(r){ return r.ok ? r.json() : null; })
       .then(function(d){
@@ -832,19 +855,24 @@ PAGE = r"""<!doctype html>
       .catch(function(){ /* pre-fill is a convenience — a blank form still works */ });
   }
 
-  document.getElementById('startFresh').onclick = function(){
-    document.getElementById('f').reset();
-    emps.innerHTML = ''; addRow();
-    locInput.value = DEFAULTS.locations;
-    xrole.value = DEFAULTS.exclude_role_keywords;
-    xkw.value = DEFAULTS.exclude_keywords;
-    document.getElementById('editing').classList.add('hidden');
-    nameInput.dispatchEvent(new Event('input'));
-    skillsEl.dispatchEvent(new Event('input'));
-    queryCount();
-    counts();
-    step = 0; show();
-  };
+  function wireStartFresh(){
+    var el = document.getElementById('startFresh');
+    if(!el) return;
+    el.onclick = function(){
+      document.getElementById('f').reset();
+      emps.innerHTML = ''; addRow();
+      locInput.value = DEFAULTS.locations;
+      xrole.value = DEFAULTS.exclude_role_keywords;
+      xkw.value = DEFAULTS.exclude_keywords;
+      document.getElementById('editing').classList.add('hidden');
+      nameInput.dispatchEvent(new Event('input'));
+      skillsEl.dispatchEvent(new Event('input'));
+      queryCount();
+      counts();
+      step = 0; show();
+    };
+  }
+  wireStartFresh();
 
   function submit(){
     next.disabled = true; back.disabled = true; next.textContent = 'Saving…';
@@ -914,7 +942,11 @@ def _render_page(hosted=False):
     files through the same ``save_all()``. Same form, same result, one source.
     """
     endpoint = "/api/onboard" if hosted else "/save"
+    # The Settings-to-form mapping lives in the site's config-forms.js, which
+    # only the hosted copy can load; the local form has no Settings page.
+    forms_script = '<script src="./config-forms.js"></script>' if hosted else ""
     return (PAGE
+            .replace("%%FORMS_SCRIPT%%", forms_script)
             .replace("%%LOCATIONS%%", json.dumps(", ".join(SOUTH_BAY_LOCATIONS)))
             .replace("%%XROLE%%", json.dumps(", ".join(DEFAULT_EXCLUDE_ROLE)))
             .replace("%%XKW%%", json.dumps(", ".join(DEFAULT_EXCLUDE_KW)))

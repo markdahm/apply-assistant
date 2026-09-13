@@ -461,6 +461,21 @@ who saved each file in a sidecar `_meta.json`.
 - The form at `/onboard` remains the intake for a new candidate. After that,
   the Settings page is where changes happen; the form's `--diff` report in the
   scheduled run is how a new submission announces itself.
+- **Settings → form (added the same day):** the Settings card offers "Open
+  the form with these settings" (`/onboard?from=settings`). The hosted form
+  then reads `api/config` and fills every box from the five files through
+  `DeskForms.toPayload` in `site/config-forms.js` — the inverse of
+  `save_all()`: contact line split into email/phone/home, lists joined with
+  commas, phrases one per line, ATS slugs turned back into careers URLs the
+  router maps to the same feed, and the resume body handed over WITHOUT its
+  Summary and Skills sections because `save_all()` adds those from the profile
+  fields. The form gained a **target role words** box (input, allowlist and
+  `save_all` all read it) so the list tuned on Settings is no longer lost
+  when the form is re-sent. `tests/test_settings_roundtrip.py` runs the real
+  JavaScript through node and the real `build_profile` / `build_sources` /
+  `save_all` and asserts the five files come back the same. The card also
+  says whether the newest submission has been applied, from the submission
+  time against the files' last save by a fetch.
 - **Forms, not just text boxes** (added the same day): `site/config-forms.js`
   gives `profile.json`, `sources.json` and `resume.md` a structured form —
   titled sections, one box per field, one-per-line lists, add/remove roles on
