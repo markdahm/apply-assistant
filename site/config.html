@@ -147,7 +147,7 @@
     var missing = files.filter(function (f) { return f.content == null; });
     var h = '';
     if (missing.length) {
-      h += '<div class="banner warn">' + missing.length + ' of 5 files are not in the store yet. On the pipeline machine run <span class="mono">apply config --push</span> once; after that, every save here is what the next run uses.</div>';
+      h += '<div class="banner warn">' + missing.length + ' of 5 files ' + (missing.length === 1 ? 'is' : 'are') + ' not saved yet. Fill ' + (missing.length === 1 ? 'it' : 'them') + ' in here and save — the form starts from blank fields — or, for a first pass over everything at once, use the onboarding form below.</div>';
     }
     h += onboardingCard();
     h += '<div class="banner info">Saving here changes what the pipeline runs on at its next pull. Applying a NEW form submission regenerates all five files and overwrites these — that only happens when an operator does it by hand.</div>';
@@ -157,21 +157,25 @@
 
     var f = files.find(function (x) { return x.name === current; });
     var form = formFor(f.name);
-    var useForm = form && mode[f.name] !== 'text' && f.content != null;
-    if (useForm && !models[f.name]) models[f.name] = form.parse(f.content);
+    // A file that does not exist yet behaves like an empty one: the form
+    // starts from blank fields and Save creates it. Treating "missing" as
+    // "cannot edit" left a brand-new candidate with a disabled box and, on
+    // clicking Form, a JSON error about an empty string.
+    var useForm = form && mode[f.name] !== 'text';
+    if (useForm && !models[f.name]) models[f.name] = form.parse(f.content || '');
 
     h += '<div class="card">'
       + '<div class="meta"><h2>' + esc(f.name) + '</h2>'
       + (form ? '<span class="mode"><span data-mode="form" class="' + (useForm ? 'on' : '') + '">Form</span><span data-mode="text" class="' + (useForm ? '' : 'on') + '">Text</span></span>' : '')
-      + '<span class="faint">' + (f.content == null ? 'not in the store yet' : (f.size + ' bytes · last saved ' + ago(f.updatedAt) + (f.by ? ' by ' + esc(f.by) : ''))) + '</span></div>'
+      + '<span class="faint">' + (f.content == null ? 'not saved yet — saving creates it' : (f.size + ' bytes · last saved ' + ago(f.updatedAt) + (f.by ? ' by ' + esc(f.by) : ''))) + '</span></div>'
       + '<div class="what">' + esc(ABOUT[f.name] || '') + '</div>';
     if (useForm) {
       h += '<div id="form">' + form.render(models[f.name]) + '</div>';
     } else {
-      h += '<textarea id="ed" class="raw" spellcheck="false"' + (f.content == null ? ' disabled placeholder="Not published yet."' : '') + '>' + esc(f.content == null ? '' : f.content) + '</textarea>';
+      h += '<textarea id="ed" class="raw" spellcheck="false"' + (f.content == null ? ' placeholder="Nothing saved yet. Type here, or switch to Form for blank fields."' : '') + '>' + esc(f.content == null ? '' : f.content) + '</textarea>';
     }
     h += '<div class="actions">'
-      + '<button id="save" class="btn primary"' + (f.content == null ? ' disabled' : '') + '>Save ' + esc(f.name) + '</button>'
+      + '<button id="save" class="btn primary">Save ' + esc(f.name) + '</button>'
       + '<button id="revert" class="btn">Revert</button>'
       + (f.name.slice(-5) === '.json' && !useForm ? '<button id="check" class="btn">Check JSON</button>' : '')
       + '<span id="msg" class="msg muted"></span>'
@@ -213,7 +217,8 @@
       if ($('ed')) $('ed').value = text;
     } else if (next === 'form') {
       var raw = $('ed') ? $('ed').value : (f.content || '');
-      var problem = jsonProblem(f.name, raw);
+      // Empty text is not an error here — it is the blank form.
+      var problem = raw.trim() ? jsonProblem(f.name, raw) : null;
       if (problem) { say('bad', 'Fix the text first: ' + problem); return; }
       models[f.name] = form.parse(raw);
       mode[f.name] = 'form'; render();
@@ -222,6 +227,7 @@
 
   function jsonProblem(name, text) {
     if (name.slice(-5) !== '.json') return null;
+    if (!String(text || '').trim()) return 'Nothing here yet. Switch to Form to fill in blank fields, or paste JSON.';
     var doc;
     try { doc = JSON.parse(text); } catch (e) { return 'Not valid JSON: ' + e.message; }
     if (!doc || typeof doc !== 'object' || Array.isArray(doc)) return 'Must be a JSON object.';
